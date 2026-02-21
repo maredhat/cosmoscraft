@@ -172,10 +172,7 @@ copy /b love.exe+cosmoscraft.love CosmosCraft.exe
 - **Engine:** LÖVE2D 11.4
 - **Language:** Lua 5.1
 - **Libraries:**
-  - Anim8 — animations
-  - Windfield — physics (WIP)
-  - STI — Tiled maps
-
+  - none
 ## 📁 Структура проекта / Project Structure
 
 ```
