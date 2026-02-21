@@ -1,14 +1,10 @@
-function logic(player)
+local function logic(player)
     local armor_now, armor_max = player:getArmor(), player:getMaxArmor() 
     local rand_armor = math.floor(math.random(10, 30))
 
     if armor_now < armor_max then player:setArmor( rand_armor ) return true end
     
     return false
-end
-
-function animation() 
-
 end
 
 
@@ -19,4 +15,7 @@ return {
     logic = logic,
     animation = nil
 }
+
+
+
 

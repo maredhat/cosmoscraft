@@ -1,30 +1,48 @@
-local SceneManager = require('scence.scene')
-local Settings = require('scence.settings.until')
-local MenuScene = require('scence.scenes.menu')
-local SettingsScene = require('scence.settings.settings')
-local SaveSelectScene = require('scence.saves.saveSelectionScene')
-local BulletScene = require('scence.scenes.devblog.bullet')
+require 'lib.util.math'
+-----------------------------------------------------------------------
+local SceneManager      = require('scence.scene')
+local Settings          = require('scence.settings.until')
+local MenuScene         = require('scence.scenes.menu')
+local SettingsScene     = require('scence.settings.settings')
+local SaveSelectScene   = require('scence.saves.saveSelectionScene')
+-----------------------------------------------------------------------
+local BulletScene       = require('scence.scenes.devblog.bullet')
+local GuiTestScene      = require('scence.scenes.devblog.guitest')
+-----------------------------------------------------------------------
 
+
+
+-----------------------------------------------------------------------
 function love.load()
     settings = Settings.new()
     
     local w, h = settings:get("width"), settings:get("height")
-    love.window.setMode(w, h, {
-        fullscreen = settings:get("fullscreen"),
-        vsync = settings:get("vsync"),
-        resizable = false
+
+    love.window.setMode(w, h, 
+    {
+        fullscreen      = settings:get("fullscreen"),
+        vsync           = settings:get("vsync"),
+        resizable       = false
     })
+    
     love.graphics.setBackgroundColor(0.05, 0.05, 0.1)
     
+
+    ---------------------------- SCENE BUILDER ----------------------------
     scenes = SceneManager.new()
-    
-    scenes:register('menu', MenuScene.new(scenes, settings))
+    -----------------------------------------------------------------------
+    scenes:register('guitest',     GuiTestScene.new(settings))
+    scenes:register('menu',        MenuScene.new(scenes, settings))
     scenes:register('save_select', SaveSelectScene.new(scenes, settings))
-    scenes:register('settings', SettingsScene.new(scenes, settings))
-    scenes:register('bullet', BulletScene.new(scenes, settings, saveSelectionScene))
-    
-    scenes:switch("menu", settings)
+    scenes:register('settings',    SettingsScene.new(scenes, settings))
+    scenes:register('bullet',      BulletScene.new(scenes, settings, saveSelectionScene))
+    -----------------------------------------------------------------------
+    scenes:switch("guitest", settings)
+    -----------------------------------------------------------------------
 end
+-----------------------------------------------------------------------
+
+
 
 function love.update(dt)
     scenes:update(dt)

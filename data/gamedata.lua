@@ -1,10 +1,10 @@
 return {
-    masterVolume = 1,
-    width = 1600,
     height = 1000,
-    vsync = true,
+    fullscreen = false,
+    vsync = false,
+    width = 1600,
     musicVolume = 0.7,
     sfxVolume = 0.8,
-    showFPS = true,
-    fullscreen = false,
+    showFPS = false,
+    masterVolume = 1,
 }

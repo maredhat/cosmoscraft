@@ -16,11 +16,11 @@ local Ships = {
             timefactor = 10,            -- Скорострельность в сек
             lifetime = 5,               -- Время жизни пули
             multi = false,              -- Мультивыстрел
-            coolDown = 0.70             -- Время для выстрела в сек
+            coolDown = 0             -- Время для выстрела в сек
         },
-        staminaTimeRegen   = 5,
-        staminaExpenditure = 0, 
-        staminaCounter     = 100
+        staminaTimeRegen   = 1.5,
+        staminaExpenditure = 10, 
+        staminaCounter     = 150
     },
     [2] = 
     {

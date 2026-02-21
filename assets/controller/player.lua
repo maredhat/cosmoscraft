@@ -1,14 +1,17 @@
+
 --------------------------------------------------------------------------------
-math.dot = function(x, y) return math.sqrt(x*x + y*y) end
-math.clamp = function(value, min, max) return math.max(min, math.min(max, value)) end
+
 --------------------------------------------------------------------------------
 
 local Ships           = require 'assets.controller.ships'
 local SpriteLoader    = require 'lib.util.animation.spriteloader' 
 
 --------------------------------------------------------------------------------
+
 local PlayerShip = {}
 PlayerShip.__index = PlayerShip
+
+--------------------------------------------------------------------------------
 
 function PlayerShip.new(x, y, s_x, s_y, tier, bulletManager)
     local self = setmetatable({}, PlayerShip)
@@ -30,7 +33,8 @@ function PlayerShip.new(x, y, s_x, s_y, tier, bulletManager)
     self._spriteWidth = 0
     self._spriteHeight = 0
     
-    self.stamina = Ships[self.tier].staminaCounter
+    self.stamina    = Ships[self.tier].staminaCounter
+    self.staminaMax = Ships[self.tier].staminaCounter
     self.items = {} -- Таблица активных подобранных предметов
 
     -- Новые поля для получения урона
@@ -69,41 +73,44 @@ function PlayerShip.new(x, y, s_x, s_y, tier, bulletManager)
     
     return self
 end
+--------------------------------------------------------------------------------
 
 
--- Supportive function
-function PlayerShip:setHealth(health) 
-    self.health = math.clamp(self.health + health, 0, self.maxHealth)
+-- Player effects
+
+function PlayerShip:poisoning(time, damage) 
+    -- создать систему отравления
 end
 
 
-function PlayerShip:setArmor(armor)
-    self.armor = math.clamp(self.armor + armor, 0, self.maxArmor)
-end
+-- Supportive function API for create items
 
-function PlayerShip:getHealth()  return self.health end
+function PlayerShip:setHealth(health) self.health = math.clamp(self.health + health, 0, self.maxHealth) end
+
+function PlayerShip:setArmor(armor) self.armor = math.clamp(self.armor + armor, 0, self.maxArmor) end
+
+function PlayerShip:getHealth() return self.health end
 function PlayerShip:getArmor() return self.armor end
 
-function PlayerShip:getMaxHealth()  return self.maxHealth end
+function PlayerShip:getMaxHealth() return self.maxHealth end
 function PlayerShip:getMaxArmor() return self.maxArmor end
 
 function PlayerShip:getTierShip() return self.tier end
 function PlayerShip:getDataShip(Tier) return Ships[self.tier] end
 
 
--- Main functions
+function PlayerShip:addItemInvenroty(type, item) self.inventory[type][item.name] = self.inventory[type][item.name] + 1 end
+function PlayerShip:deleteItemInvenroty(type, item) self.inventory[type][item.name] = self.inventory[type][item.name] - 1 end
 
+function PlayerShip:getPosition() return self.x, self.y end
+function PlayerShip:getRadius() return 20 end
 
-function PlayerShip:load()
-    
-    local shipPath = Ships[self.tier].directSprite
-    
-    self.animation = SpriteLoader(shipPath)
-    
+function PlayerShip:setStamina(stamina) self.stamina = math.clamp(self.stamina + stamina, 0, self.staminaMax) end
 
-    self.currentSprite = self.animation['idle'].sprite
-end
+function PlayerShip:getStamina() return self.stamina end
+function PlayerShip:getStaminaMax() return self.staminaMax end
 
+-- Function In this file
 function PlayerShip:takeDamage(amount, bullet)
     if not self.active then return false end
     
@@ -143,14 +150,6 @@ function PlayerShip:takeDamage(amount, bullet)
     return false
 end
 
-function PlayerShip:getPosition()
-    return self.x, self.y
-end
-
-function PlayerShip:getRadius()
-    return 20
-end
-
 function PlayerShip:checkCollision(bullet)
     if not self.active then return false end
     
@@ -184,6 +183,16 @@ function PlayerShip:shoot(config)
         "player"        
     )
 end
+
+-- Main functions
+
+
+function PlayerShip:load()
+    local shipPath = Ships[self.tier].directSprite
+    self.animation = SpriteLoader(shipPath)
+    self.currentSprite = self.animation['idle'].sprite
+end
+
 
 function PlayerShip:update(dt)
     if not self.active then
@@ -245,7 +254,6 @@ function PlayerShip:update(dt)
 
 
 
-
         local cosA, sinA = math.cos(self.angle), math.sin(self.angle)
         local moveX = cosA * dx - sinA * dy
         local moveY = sinA * dx + cosA * dy
@@ -272,6 +280,72 @@ function PlayerShip:update(dt)
             self.__bulletCoolDown = Ships[self.tier].bulletConfig.coolDown
         end
     end
+end
+
+
+
+function PlayerShip:hud()
+    local centerOx = function(size_w1, size_w2) return (size_w1 / 2) - size_w2 / 2 end    
+
+
+    local w_screen, h_screen = love.graphics.getWidth(), love.graphics.getHeight()
+
+    -- HITPOINTS
+    do
+        local health_w = w_screen / 3
+        local health_h = 5.5 * 2
+
+        local hitpoints = math.clamp(self:getHealth() * (health_w / self:getMaxHealth()), 0, health_w)
+        local center_health = centerOx(w_screen, health_w)
+        
+
+        love.graphics.setColor(1, 1, 1, 0.75)
+        love.graphics.setLineWidth(0.2)
+        love.graphics.rectangle("line", center_health, health_h, health_w, health_h, 5, 8.5)
+        love.graphics.setColor(1, 0, 0, 0.75)
+        love.graphics.rectangle("fill", center_health, health_h, hitpoints, health_h, 5, 8.5)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.print(self:getHealth() .. '/' .. self:getMaxHealth(), health_w * 2.01, health_h - 2)
+    end
+    
+
+    --ARMOR 
+    do
+        local health_w = w_screen / 3
+        local health_h = 8.5 * 4
+
+        local hitpoints = math.clamp(self:getArmor() * (health_w / self:getMaxArmor()), 0, health_w)
+        local center_health = centerOx(w_screen, health_w)
+        
+
+        love.graphics.setColor(1, 1, 1, 0.75)
+        love.graphics.setLineWidth(0.2)
+        love.graphics.rectangle("line", center_health, health_h, health_w, 6, 5, 6)
+        love.graphics.setColor(0, 0.5, 1, 0.75)
+        love.graphics.rectangle("fill", center_health, health_h, hitpoints, 6, 5, 6)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.print(math.floor(self:getArmor()) .. '/' .. self:getMaxArmor(), health_w * 2.01, health_h - 2)
+    end
+
+
+    -- Stamina
+    do
+    local health_w = w_screen / 3
+        local health_h = 8.5 * 6
+
+        local hitpoints = math.clamp(self:getStamina() * (health_w / self:getStaminaMax()), 0, health_w)
+        local center_health = centerOx(w_screen, health_w)
+        
+
+        love.graphics.setColor(1, 1, 1, 0.75)
+        love.graphics.setLineWidth(0.2)
+        love.graphics.rectangle("line", center_health, health_h, health_w, 6, 5, 6)
+        love.graphics.setColor(1, 0.5, 0, 0.75)
+        love.graphics.rectangle("fill", center_health, health_h, hitpoints, 6, 5, 6)
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+
+
 end
 
 function PlayerShip:draw()
@@ -310,30 +384,6 @@ function PlayerShip:draw()
         love.graphics.print("-" .. dmg.amount, dmg.x - 10, dmg.y)
     end
 
-    -- Полоски здоровья, брони, стамина
-    do
-        local hpX, hpY = self.x - 40, self.y - 50
-        local armorY = self.y - 55
-        
-        -- HP bar
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.rectangle("line", hpX, hpY, 80, 8.5)
-        love.graphics.setColor(0.5, 0, 0, 1)
-        love.graphics.rectangle("fill", hpX, hpY, (self.health / self.maxHealth) * 80, 8.5)
-        
-        -- Armor bar
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.rectangle("line", hpX, armorY, 80, 5)
-        love.graphics.setColor(0, 0, 0.5, 1)
-        love.graphics.rectangle("fill", hpX, armorY, (self.armor / self.maxArmor) * 80, 5)
-        
-        love.graphics.setColor(1, 1, 1, 1)
-
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.rectangle("line", hpX, armorY - 15, 80, 5)
-        love.graphics.setColor(0.7, 0.7, 0, 1)
-        love.graphics.rectangle("fill", hpX, armorY - 15, (math.clamp(self.stamina, 0, 80)), 5)
-    end
 end
 
 setmetatable(PlayerShip, {

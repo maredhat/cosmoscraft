@@ -100,12 +100,13 @@ end
 
 function BulletScene:saveGame()
     local saveData = {
-        time = self.gameTime,
-        kills = self.killCount,
+        time     = self.gameTime,
+        kills    = self.killCount,
         progress = 0,
-        playerX = self.player.x,
-        playerY = self.player.y,
-        date = os.date("%Y-%m-%d %H:%M:%S")
+        playerX  = self.player.x,
+        playerY  = self.player.y,
+        date     = os.date("%Y-%m-%d %H:%M:%S"),
+        tier     = self.player.tier
     }
     local file = io.open("data/saves/save_" .. self.saveSlot .. ".lua", "w")
     if file then
@@ -402,6 +403,7 @@ function BulletScene:draw()
 
     self.camera:detach()
     
+    self.player:hud()
     -- UI
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(love.graphics.newFont(12))
