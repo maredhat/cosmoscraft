@@ -1,3 +1,4 @@
+require 'lib.util.math'
 
 --------------------------------------------------------------------------------
 
@@ -294,8 +295,9 @@ function PlayerShip:hud()
     do
         local health_w = w_screen / 3
         local health_h = 5.5 * 2
+        local health = self:getHealth()
 
-        local hitpoints = math.clamp(self:getHealth() * (health_w / self:getMaxHealth()), 0, health_w)
+        local hitpoints = math.clamp(health * (health_w / self:getMaxHealth()), 0, health_w)
         local center_health = centerOx(w_screen, health_w)
         
 

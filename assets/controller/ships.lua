@@ -16,7 +16,7 @@ local Ships = {
             timefactor = 10,            -- Скорострельность в сек
             lifetime = 5,               -- Время жизни пули
             multi = false,              -- Мультивыстрел
-            coolDown = 0             -- Время для выстрела в сек
+            coolDown = 0.35            -- Время для выстрела в сек
         },
         staminaTimeRegen   = 1.5,
         staminaExpenditure = 10, 

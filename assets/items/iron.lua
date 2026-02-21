@@ -1,10 +1,13 @@
-local function logic(player)
-    local hp_now, hp_max = player:getHealth(), player:getMaxHealth() 
-    local rand_hp = math.floor(math.random(10, 30))
+function logic(player)
+    local now, max = player:getHealth(), player:getMaxHealth()
+    if now >= max then return false end
 
-    if hp_now < hp_max then player:setHealth( rand_hp ) return true end
-    
-    return false
+    local amount = math.floor(math.random(10, 30))
+    local new = math.min(now + amount, max)
+
+    player:setHealth(new)
+
+    return new > now
 end
 
 return

@@ -1,10 +1,13 @@
-local function logic(player)
-    local armor_now, armor_max = player:getArmor(), player:getMaxArmor() 
-    local rand_armor = math.floor(math.random(10, 30))
+function logic(player)
+    local now, max = player:getArmor(), player:getMaxArmor()
+    if now >= max then return false end
 
-    if armor_now < armor_max then player:setArmor( rand_armor ) return true end
-    
-    return false
+    local amount = math.floor(math.random(10, 30))
+    local new = math.min(now + amount, max)
+
+    player:setArmor(new)
+
+    return new > now
 end
 
 
