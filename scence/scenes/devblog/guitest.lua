@@ -89,7 +89,7 @@ function GuiTest.new(settings)
     })
 
     local list = self.inventory.childrens.craftsLists
-    for i = 1, 100 do
+    for i = 1, 30 do
         list:addChildren("item"..i, {
             order = i,
             draw = function(self)

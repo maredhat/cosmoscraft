@@ -6,21 +6,28 @@ local Ships = {
         speedMovement = 100,
         speedRotation = 2,
         speedAttack = 1,
-        speedSprint = 2.5,
+        speedSprint = 1.5,
         bulletConfig = {
-            speed = 250,                -- Скорость пули
-            damage = 500,                 -- Урон 
+            speed = 800,                -- Скорость пули
+            damage = 10,                 -- Урон 
             penetration = 5,            -- Пробитие
             size = 5,                   -- Размер пули
-            color = {0.8, 0.4, 0, 1},   -- Цвет пули RGBA
+            color = {0.7, 0.7, 0, 1},   -- Цвет пули RGBA
             timefactor = 10,            -- Скорострельность в сек
             lifetime = 5,               -- Время жизни пули
             multi = false,              -- Мультивыстрел
             coolDown = 0.35            -- Время для выстрела в сек
         },
         staminaTimeRegen   = 1.5,
-        staminaExpenditure = 10, 
-        staminaCounter     = 150
+        staminaExpenditure = 0,
+        staminaCounter     = 150,
+        acceleration       = 400,  
+        maxSpeed           = 600,   
+        friction           = 0.5,
+        sprintAcceleration = 400,
+        sprintMaxSpeed     = 700,   
+        angularVelocity    = 0.1,
+        angularFriction    = 0.8
     },
     [2] = 
     {

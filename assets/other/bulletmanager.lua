@@ -10,38 +10,43 @@ function BulletManager.new()
     return self
 end
 
-function BulletManager:shoot(x, y, angle, speed, damage, size, color, lifeTime, owner)
+
+function BulletManager:shoot(options)
     local bullet
-    
     if #self.pool > 0 then
         bullet = table.remove(self.pool)
-        bullet.x = x
-        bullet.y = y
-        bullet.angle = angle
-        bullet.speed = speed
-        bullet.damage = damage
-        bullet.size = size
-        bullet.color = color or {1, 1, 1, 1}
-        bullet.lifeTime = lifeTime or 2
+        bullet.x = options.x
+        bullet.y = options.y
+        bullet.angle = options.angle
+        bullet.speed = options.speed
+        bullet.damage = options.damage
+        bullet.penetration = options.penetration or 0
+        bullet.size = options.size
+        bullet.color = options.color or {1, 1, 1, 1}
+        bullet.lifeTime = options.lifeTime or 2
+        bullet.owner = options.owner or nil
         bullet.timer = 0
         bullet.active = true
-        bullet.owner = owner or "neutral"
-        bullet.vx = math.cos(angle) * speed
-        bullet.vy = math.sin(angle) * speed
+        if options.vx and options.vy then
+            bullet.vx = options.vx
+            bullet.vy = options.vy
+        else
+            bullet.vx = math.cos(bullet.angle) * bullet.speed
+            bullet.vy = math.sin(bullet.angle) * bullet.speed
+        end
     else
-        bullet = Bullet.new(x, y, angle, speed, damage, size, color, lifeTime, owner)
+        bullet = Bullet.new(options)
     end
-    
     table.insert(self.bullets, bullet)
     return bullet
 end
+
 
 function BulletManager:update(dt)
     local i = 1
     while i <= #self.bullets do
         local bullet = self.bullets[i]
         bullet:update(dt)
-        
         if not bullet.active then
             table.remove(self.bullets, i)
             table.insert(self.pool, bullet)
@@ -52,17 +57,27 @@ function BulletManager:update(dt)
 end
 
 function BulletManager:draw()
-    for _, bullet in ipairs(self.bullets) do
-        bullet:draw()
+    local bullets = self.bullets          
+    for i = 1, #bullets do
+        bullets[i]:draw()
     end
 end
 
 function BulletManager:clear()
-    for _, bullet in ipairs(self.bullets) do
-        table.insert(self.pool, bullet)
+    if #self.bullets == 0 then return end
+
+    local bullets = self.bullets
+
+    local pool = self.pool
+    local offset = #pool               
+    for i = 1, #bullets do
+        pool[offset + i] = bullets[i]  
     end
-    self.bullets = {}
+    
+
+    self.bullets = {}                      
 end
+
 
 function BulletManager:getCount()
     return #self.bullets

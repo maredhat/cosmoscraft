@@ -130,9 +130,9 @@ function Lists:mousepressed(mx, my, button)
     if not self.isVisible or button ~= 1 then return end
     if not self.showScrollbar or self.contentH <= self.h then return end
 
-    local barX = self.x + self.w - self.scrollbarWidth - 2
-    local barY = self.y + 2
-    local barH = self.h - 4
+    local barX   = self.x + self.w - self.scrollbarWidth - 2
+    local barY   = self.y + 2
+    local barH   = self.h - 4
     local thumbH = math.max(20, barH * (self.h / self.contentH))
     local thumbY = barY + (self.scrollY / (self.contentH - self.h)) * (barH - thumbH)
 

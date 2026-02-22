@@ -1,14 +1,13 @@
-
 local SpriteLoader = require 'lib.util.animation.spriteloader'
-local Rate   = require 'assets.items.config.rates'
+local Rate = require 'assets.items.config.rates'
 local Config = require 'assets.enemy.drone.config'
-----------------------------
+
 local Drone = {}
 Drone.__index = Drone
 
 local DroneSettings = Config
 
-function Drone.new(x, y, bulletManager, player, tier, scene, debug)
+function Drone.new(x, y, bulletManager, player, tier, scene, debug, settingsOverride)
     local self = setmetatable({}, Drone)
     
     self.x = x or 0
@@ -31,6 +30,7 @@ function Drone.new(x, y, bulletManager, player, tier, scene, debug)
     self.bulletSpeed = s.bulletSpeed
     self.bulletDamage = s.bulletDamage
     self.bulletSize = s.bulletSize
+    self.bulletPenetration = s.bulletPenetration
     self.bulletColor = s.bulletColor
     self.bulletCount = s.bulletCount
     self.bulletSpread = s.bulletSpread
@@ -59,7 +59,7 @@ function Drone.new(x, y, bulletManager, player, tier, scene, debug)
     self.investigationSpeed = s.investigationSpeed
     
     self.debug = debug or s.debug
-    
+
     self.angle = 0
     self.active = true
     self.alerted = false
@@ -85,18 +85,34 @@ function Drone.new(x, y, bulletManager, player, tier, scene, debug)
     self.hitFlash = nil
     self.deathEffect = nil
     
+    self.vx = 0
+    self.vy = 0
     
+    self.acceleration = s.acceleration or 200
+    self.maxSpeed = s.maxSpeed or 150
+    self.friction = s.friction or 3.0
+    self.mass = s.mass or 1
+
+    self.scale = s.scale or 1.2
+    self.preferredDistance = s.preferredDistance or 80
+    self.separationDistance = s.separationDistance or 60
+
+    if settingsOverride and type(settingsOverride) == "table" then
+        for k, v in pairs(settingsOverride) do
+            self[k] = v
+        end
+    end
+
     return self
 end
 
-
-
-
 function Drone:load()
     self.animation = SpriteLoader('resource/other/enemy/drone/')
+    if self.animation and self.animation.idle then
+        self.width = self.animation.idle.width   * (self.scale / 2)
+        self.height = self.animation.idle.height * (self.scale / 2)
+    end
 end
-
-
 
 function Drone:takeDamage(amount, bullet)
     self.health = self.health - amount
@@ -111,7 +127,6 @@ function Drone:takeDamage(amount, bullet)
     
     self.hitFlash = 0.15
     
-    -- Начинаем исследование места, откуда прилетела пуля
     if bullet and bullet.x and bullet.y then
         self:startInvestigation(bullet.x, bullet.y)
     end
@@ -120,7 +135,6 @@ function Drone:takeDamage(amount, bullet)
         self.active = false
         self.deathEffect = 0.4
         
-        -- Дроп предметов
         if self.scene and self.scene.itemManager and self.drops then
             for _, drop in ipairs(self.drops) do
                 if math.random() < drop.chance then
@@ -145,37 +159,51 @@ function Drone:getPosition()
     return self.x, self.y
 end
 
+function Drone:applyCollisionDamage(impact)
+    if not self.active then return end
+    local damage = math.floor(impact)
+    if damage < 1 then damage = 1 end
+    self.health = self.health - damage
+    table.insert(self.damageNumbers, {x=self.x, y=self.y-20, amount=damage, timer=0.6, alpha=1})
+    self.hitFlash = 0.15
+    if self.health <= 0 then
+        self.active = false
+        self.deathEffect = 0.4
+        if self.scene and self.scene.itemManager and self.drops then
+            for _, drop in ipairs(self.drops) do
+                if math.random() < drop.chance then
+                    self.scene.itemManager:addItem(self.x, self.y, drop.name)
+                end
+            end
+        end
+    end
+end
+
 function Drone:getRadius()
     return self.width / 2
 end
 
 function Drone:checkCollision(bullet)
     if not self.active then return false end
-    
     local dx = bullet.x - self.x
     local dy = bullet.y - self.y
     local dist = math.sqrt(dx*dx + dy*dy)
-    
     return dist < self.width/2 + bullet.size
 end
 
 function Drone:canSeePlayer()
     if not self.player or not self.player.active then return false end
-    
     local dx = self.player.x - self.x
     local dy = self.player.y - self.y
     local dist = math.sqrt(dx*dx + dy*dy)
-    
     return dist < self.detectionRange
 end
 
 function Drone:canAttackPlayer()
     if not self.player or not self.player.active then return false end
-    
     local dx = self.player.x - self.x
     local dy = self.player.y - self.y
     local dist = math.sqrt(dx*dx + dy*dy)
-    
     return dist < self.attackRange
 end
 
@@ -188,14 +216,8 @@ end
 
 function Drone:smoothRotate(targetAngle, dt)
     local angleDiff = targetAngle - self.angle
-    
-    while angleDiff > math.pi do
-        angleDiff = angleDiff - 2 * math.pi
-    end
-    while angleDiff < -math.pi do
-        angleDiff = angleDiff + 2 * math.pi
-    end
-    
+    while angleDiff > math.pi do angleDiff = angleDiff - 2*math.pi end
+    while angleDiff < -math.pi do angleDiff = angleDiff + 2*math.pi end
     local maxRotation = self.rotationSpeed * dt
     if math.abs(angleDiff) > maxRotation then
         self.angle = self.angle + (angleDiff > 0 and 1 or -1) * maxRotation
@@ -217,12 +239,9 @@ function Drone:updateIntelligence(dt, allDrones)
     if self.investigationMode then
         self.currentState = "investigate"
         self.investigationTimer = self.investigationTimer - dt
-        
         if self.investigationTimer <= 0 or seesPlayer then
             self.investigationMode = false
-            if not seesPlayer then
-                self:startPatrol()
-            end
+            if not seesPlayer then self:startPatrol() end
         end
     elseif not seesPlayer and not self.alerted and not self.patrolMode then
         self.currentState = "idle"
@@ -242,16 +261,10 @@ function Drone:updateIntelligence(dt, allDrones)
                     local dx = drone.x - self.x
                     local dy = drone.y - self.y
                     local dist = math.sqrt(dx*dx + dy*dy)
-                    if dist < self.communicationRange then
-                        alliesNearby = alliesNearby + 1
-                    end
+                    if dist < self.communicationRange then alliesNearby = alliesNearby + 1 end
                 end
             end
-            if alliesNearby > 2 then
-                self.currentState = "flank"
-            else
-                self.currentState = "chase"
-            end
+            self.currentState = (alliesNearby > 2) and "flank" or "chase"
         end
     elseif self.alerted then
         self.currentState = "search"
@@ -263,22 +276,18 @@ function Drone:updateIntelligence(dt, allDrones)
         self.investigationMode = false
         self.timeSinceLastSeen = 0
         self.lastKnownPlayerPosition = {x = self.player.x, y = self.player.y}
-        
         for _, drone in ipairs(allDrones) do
             if drone ~= self and drone.active then
                 local dx = drone.x - self.x
                 local dy = drone.y - self.y
                 local dist = math.sqrt(dx*dx + dy*dy)
-                
                 if dist < self.communicationRange then
                     drone:receiveIntel(self.lastKnownPlayerPosition)
                 end
             end
         end
-        
     else
         self.timeSinceLastSeen = self.timeSinceLastSeen + dt
-        
         if self.timeSinceLastSeen >= self.patrolTime and not self.patrolMode and not self.investigationMode then
             self:startPatrol()
         end
@@ -287,7 +296,6 @@ end
 
 function Drone:receiveIntel(playerPosition)
     if not self.active or self:canSeePlayer() then return end
-    
     self.alerted = true
     self.patrolMode = false
     self.investigationMode = false
@@ -305,22 +313,18 @@ end
 function Drone:generatePatrolPath()
     local angle = math.random() * math.pi * 2
     local distance = math.random() * self.patrolRadius
-    
     self.patrolTargetX = self.patrolStartX + math.cos(angle) * distance
     self.patrolTargetY = self.patrolStartY + math.sin(angle) * distance
-    
     self.patrolWaitTimer = math.random() * 2
 end
 
-function Drone:advancedCollisionAvoidance(allDrones, dt)
+function Drone:advancedCollisionAvoidance(allDrones)
     local avoidanceX, avoidanceY = 0, 0
-    
     for _, drone in ipairs(allDrones) do
         if drone ~= self and drone.active then
             local dx = self.x - drone.x
             local dy = self.y - drone.y
             local dist = math.sqrt(dx*dx + dy*dy)
-            
             if dist < self.separationDistance and dist > 0 then
                 local strength = (self.separationDistance - dist) / self.separationDistance
                 avoidanceX = avoidanceX + (dx / dist) * strength * 2
@@ -328,26 +332,98 @@ function Drone:advancedCollisionAvoidance(allDrones, dt)
             end
         end
     end
-    
     return avoidanceX, avoidanceY
 end
 
-function Drone:tacticalPositioning(dt)
+function Drone:avoidCollisions(allDrones, dt)
+    local avoidanceX, avoidanceY = 0, 0
+    local timeHorizon = 2.0
+
+    for _, other in ipairs(allDrones) do
+        if other ~= self and other.active then
+            local dx = other.x - self.x
+            local dy = other.y - self.y
+            local dist = math.sqrt(dx*dx + dy*dy)
+            if dist < self.separationDistance * 2 then
+                local dvx = other.vx - self.vx
+                local dvy = other.vy - self.vy
+                local a = dvx*dvx + dvy*dvy
+                if a > 0 then
+                    local b = 2 * (dx*dvx + dy*dvy)
+                    local c = dx*dx + dy*dy - (self.width/2 + other.width/2)^2
+                    local discriminant = b*b - 4*a*c
+                    if discriminant >= 0 then
+                        local t = (-b - math.sqrt(discriminant)) / (2*a)
+                        if t > 0 and t < timeHorizon then
+                            local predX = self.x + self.vx * t
+                            local predY = self.y + self.vy * t
+                            local otherPredX = other.x + other.vx * t
+                            local otherPredY = other.y + other.vy * t
+                            local dxPred = otherPredX - predX
+                            local dyPred = otherPredY - predY
+                            local distPred = math.sqrt(dxPred*dxPred + dyPred*dyPred)
+                            if distPred > 0 then
+                                local strength = (self.separationDistance - distPred) / self.separationDistance
+                                strength = math.max(0, math.min(1, strength))
+                                avoidanceX = avoidanceX - (dxPred / distPred) * strength * 5
+                                avoidanceY = avoidanceY - (dyPred / distPred) * strength * 5
+                            end
+                        end
+                    end
+                end
+                if dist < self.separationDistance and dist > 0 then
+                    local strength = (self.separationDistance - dist) / self.separationDistance
+                    avoidanceX = avoidanceX + (dx / dist) * strength * 2
+                    avoidanceY = avoidanceY + (dy / dist) * strength * 2
+                end
+            end
+        end
+    end
+    return avoidanceX, avoidanceY
+end
+
+function Drone:maintainFormation(allDrones)
+    local cohesionX, cohesionY = 0, 0
+    local count = 0
+    for _, other in ipairs(allDrones) do
+        if other ~= self and other.active then
+            local dx = other.x - self.x
+            local dy = other.y - self.y
+            local dist = math.sqrt(dx*dx + dy*dy)
+            if dist > 0 then
+                if dist > self.preferredDistance then
+                    local strength = math.min(1, (dist - self.preferredDistance) / self.preferredDistance)
+                    cohesionX = cohesionX + (dx / dist) * strength * 0.5
+                    cohesionY = cohesionY + (dy / dist) * strength * 0.5
+                elseif dist < self.preferredDistance then
+                    local strength = math.min(1, (self.preferredDistance - dist) / self.preferredDistance)
+                    cohesionX = cohesionX - (dx / dist) * strength * 0.5
+                    cohesionY = cohesionY - (dy / dist) * strength * 0.5
+                end
+                count = count + 1
+            end
+        end
+    end
+    if count > 0 then
+        return cohesionX / count, cohesionY / count
+    else
+        return 0, 0
+    end
+end
+
+function Drone:getDesiredDirection(dt)
     if not self.player or not self.player.active then return 0, 0 end
     
     local dx = self.player.x - self.x
     local dy = self.player.y - self.y
     local dist = math.sqrt(dx*dx + dy*dy)
     local dirX, dirY = 0, 0
-    
     if dist > 0 then
         dirX = dx / dist
         dirY = dy / dist
     end
-    
     local perpX = -dirY
     local perpY = dirX
-    
     local moveX, moveY = 0, 0
     
     if self.currentState == "investigate" and self.investigationTarget then
@@ -361,23 +437,18 @@ function Drone:tacticalPositioning(dt)
     elseif self.currentState == "attack" then
         self.zigzagTimer = self.zigzagTimer + dt * self.zigzagFrequency
         local zigzag = math.sin(self.zigzagTimer + self.zigzagOffset) * self.zigzagAmplitude
-        
         moveX = dirX * 0.3 + perpX * zigzag * 0.01
         moveY = dirY * 0.3 + perpY * zigzag * 0.01
-        
     elseif self.currentState == "retreat" then
         moveX = -dirX
         moveY = -dirY
-        
     elseif self.currentState == "chase" then
         moveX = dirX
         moveY = dirY
-        
     elseif self.currentState == "flank" then
         local side = (self.zigzagOffset > 0.5) and 1 or -1
         moveX = perpX * side * 0.7 + dirX * 0.3
         moveY = perpY * side * 0.7 + dirY * 0.3
-        
     elseif self.currentState == "search" and self.lastKnownPlayerPosition then
         local tx = self.lastKnownPlayerPosition.x - self.x
         local ty = self.lastKnownPlayerPosition.y - self.y
@@ -387,7 +458,6 @@ function Drone:tacticalPositioning(dt)
             moveY = ty / tdist
         end
     end
-    
     return moveX, moveY
 end
 
@@ -395,7 +465,6 @@ function Drone:patrolMovement(dt)
     local dx = self.patrolTargetX - self.x
     local dy = self.patrolTargetY - self.y
     local dist = math.sqrt(dx*dx + dy*dy)
-    
     if dist < 30 then
         if self.patrolWaitTimer then
             self.patrolWaitTimer = self.patrolWaitTimer - dt
@@ -410,76 +479,96 @@ function Drone:patrolMovement(dt)
 end
 
 function Drone:update(dt, allDrones)
-    if not self.active or not self.player then 
-        if self.deathEffect then
-            self.deathEffect = self.deathEffect - dt
-        end
-        return 
+    if not self.active or not self.player then
+        if self.deathEffect then self.deathEffect = self.deathEffect - dt end
+        return
     end
-    
+
+    local oldX, oldY = self.x, self.y
+
     if self.hitFlash then
         self.hitFlash = self.hitFlash - dt
-        if self.hitFlash <= 0 then
-            self.hitFlash = nil
-        end
+        if self.hitFlash <= 0 then self.hitFlash = nil end
     end
-    
+
+
+
     local i = 1
     while i <= #self.damageNumbers do
         local dmg = self.damageNumbers[i]
         dmg.timer = dmg.timer - dt
         dmg.alpha = dmg.timer * 1.67
         dmg.y = dmg.y - 30 * dt
-        
         if dmg.timer <= 0 then
             table.remove(self.damageNumbers, i)
         else
             i = i + 1
         end
     end
-    
+
     self:updateIntelligence(dt, allDrones)
-    
+
     if not self.patrolMode and not self.investigationMode and self:canAttackPlayer() then
         if self.shootTimer > 0 then
             self.shootTimer = self.shootTimer - dt
         end
-        
         if self.shootTimer <= 0 then
             self.shootTimer = self.shootCooldown
             self:shoot()
         end
     end
-    
-    local moveX, moveY = 0, 0
-    local currentSpeed = self.speed
-    
+
+        local desiredX, desiredY = 0, 0
+    local targetSpeed = self.speed
+
     if self.patrolMode then
-        moveX, moveY = self:patrolMovement(dt)
-        currentSpeed = self.patrolSpeed
+        desiredX, desiredY = self:patrolMovement(dt)
+        targetSpeed = self.patrolSpeed
     elseif self.investigationMode then
-        moveX, moveY = self:tacticalPositioning(dt)
-        currentSpeed = self.investigationSpeed
+        desiredX, desiredY = self:getDesiredDirection(dt)
+        targetSpeed = self.investigationSpeed
     else
-        moveX, moveY = self:tacticalPositioning(dt)
-        
-        local avoidX, avoidY = self:advancedCollisionAvoidance(allDrones, dt)
-        moveX = moveX + avoidX
-        moveY = moveY + avoidY
-        
-        local len = math.sqrt(moveX*moveX + moveY*moveY)
-        if len > 0 then
-            moveX = moveX / len
-            moveY = moveY / len
-        end
+        desiredX, desiredY = self:getDesiredDirection(dt)
     end
-    
-    if moveX ~= 0 or moveY ~= 0 then
-        local targetAngle = math.atan2(moveY, moveX)
+
+    local avoidX, avoidY = self:avoidCollisions(allDrones, dt)
+    local formX, formY = self:maintainFormation(allDrones)
+    desiredX = desiredX + avoidX + formX
+    desiredY = desiredY + avoidY + formY
+
+    local len = math.sqrt(desiredX*desiredX + desiredY*desiredY)
+    if len > 0 then
+        desiredX = desiredX / len
+        desiredY = desiredY / len
+    end
+
+    if desiredX ~= 0 or desiredY ~= 0 then
+        local targetAngle = math.atan2(desiredY, desiredX)
         self:smoothRotate(targetAngle, dt)
-        
-        self.x = self.x + math.cos(self.angle) * currentSpeed * dt
-        self.y = self.y + math.sin(self.angle) * currentSpeed * dt
+        local forwardX = math.cos(self.angle)
+        local forwardY = math.sin(self.angle)
+        local accelX = forwardX * self.acceleration * dt
+        local accelY = forwardY * self.acceleration * dt
+        self.vx = self.vx + accelX
+        self.vy = self.vy + accelY
+    else
+        self.vx = self.vx * (1 - self.friction * dt)
+        self.vy = self.vy * (1 - self.friction * dt)
+    end
+
+
+    local speed = math.sqrt(self.vx^2 + self.vy^2)
+    if speed > self.maxSpeed then
+        self.vx = self.vx / speed * self.maxSpeed
+        self.vy = self.vy / speed * self.maxSpeed
+    end
+
+    self.x = self.x + self.vx * dt
+    self.y = self.y + self.vy * dt
+
+    if dt > 0 then
+        self.vx = (self.x - oldX) / dt
+        self.vy = (self.y - oldY) / dt
     end
 end
 
@@ -487,34 +576,8 @@ function Drone:shoot()
     if not self.bulletManager or not self.player then return end
     
     local offset = 25
-    local predictTime = 0.15
-    local playerVx = 0
-    local playerVy = 0
-    
-    if self.player.vx and self.player.vy then
-        playerVx = self.player.vx
-        playerVy = self.player.vy
-    elseif self.player.velocityX and self.player.velocityY then
-        playerVx = self.player.velocityX
-        playerVy = self.player.velocityY
-    end
-    
-    local targetX = self.player.x + playerVx * predictTime
-    local targetY = self.player.y + playerVy * predictTime
-    
-    local dx = targetX - self.x
-    local dy = targetY - self.y
-    local dist = math.sqrt(dx*dx + dy*dy)
-    
-    local shootAngle
-    if dist > 0 then
-        shootAngle = math.atan2(dy, dx)
-    else
-        shootAngle = self.angle
-    end
-    
-    local spread = (math.random() * 2 - 1) * self.bulletSpread * 0.7
-    local bulletAngle = shootAngle + spread
+
+    local bulletAngle = self.angle  
     
     local dirX = math.cos(bulletAngle)
     local dirY = math.sin(bulletAngle)
@@ -522,16 +585,23 @@ function Drone:shoot()
     local bulletX = self.x + dirX * offset
     local bulletY = self.y + dirY * offset
     
-    self.bulletManager:shoot(
-        bulletX, bulletY,
-        bulletAngle,
-        self.bulletSpeed,
-        self.bulletDamage,
-        self.bulletSize,
-        self.bulletColor,
-        3.5,
-        "enemy"
-    )
+    local bulletVx = dirX * self.bulletSpeed + self.vx
+    local bulletVy = dirY * self.bulletSpeed + self.vy
+    
+    self.bulletManager:shoot({
+        x = bulletX,
+        y = bulletY,
+        vx = bulletVx,
+        vy = bulletVy,
+        angle = bulletAngle,
+        speed = self.bulletSpeed,
+        damage = self.bulletDamage,
+        penetration = self.bulletPenetration,
+        size = self.bulletSize,
+        color = self.bulletColor,
+        lifeTime = 3.5,
+        owner = "enemy"
+    })
 end
 
 function Drone:draw()
@@ -543,33 +613,27 @@ function Drone:draw()
     
     if not self.active then return end
     
-    -- Отрисовка спрайта дрона
     if self.animation and self.animation.idle and self.animation.idle.sprite then
         love.graphics.draw(
             self.animation.idle.sprite,
             self.x, self.y,
-            self.angle + math.pi/2 ,
-            2, 2,  -- масштаб (можно изменить при необходимости)
+            self.angle + math.pi/2,
+            self.scale, self.scale,
             self.animation.idle.width / 2,
             self.animation.idle.height / 2
         )
     else
-        -- Запасной вариант (красный квадрат)
         love.graphics.setColor(1, 0, 0, 1)
         love.graphics.rectangle("fill", self.x - self.width/2, self.y - self.height/2, self.width, self.height)
     end
     
-    -- Глаз (показывает направление)
     love.graphics.setColor(1, 1, 1, 1)
-
-    -- Полоска здоровья
     love.graphics.setColor(0.2, 0.2, 0.2, 1)
     love.graphics.rectangle("fill", self.x - self.width/2, self.y - self.height/2 - 12, self.width, 4)
     love.graphics.setColor(1, 0, 0, 1)
     local healthWidth = (self.health / self.maxHealth) * self.width
     love.graphics.rectangle("fill", self.x - self.width/2, self.y - self.height/2 - 12, healthWidth, 4)
 
-    -- Числа урона
     for _, dmg in ipairs(self.damageNumbers) do
         love.graphics.setColor(1, 1, 0, dmg.alpha)
         love.graphics.print("-" .. dmg.amount, dmg.x - 15, dmg.y)

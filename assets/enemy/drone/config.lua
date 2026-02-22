@@ -12,7 +12,8 @@ return {
         bulletColor = {1, 0.3, 0.3, 1},
         bulletCount = 1,
         bulletSpread = 0.15,
-        
+        bulletPenetration = 0.5,
+
         size = 32,
         color = {1, 0.2, 0.2, 1},
         health = 80,

@@ -31,18 +31,18 @@ function BulletScene.new(manager, settings, saveSlot)
     self.gridColor = {0.2, 0.2, 0.3, 0.15}
     
     self.worldBounds = {
-        left = -5000,
-        right = 5000,
-        top = -5000,
-        bottom = 5000
+        left = -10000,
+        right = 10000,
+        top = -10000,
+        bottom = 10000
     }
     
     self.drones = {}
-    self:spawnRandomDrones(50)
+    self:spawnRandomDrones(200)
     
     self.dronesChanged = true
     
-    self.parallax = Parallax.new(10000, 10000)
+    self.parallax = Parallax.new(10000 * 2, 10000 * 2)
     self.parallax:addGalaxies(8, 0.005, 0.001)
     self.parallax:addNebula(15, 0.02, 0.003, "red")
     self.parallax:addNebula(12, 0.02, 0.003, "blue")
@@ -272,6 +272,32 @@ function BulletScene:updateDroneNetwork()
     end
 end
 
+local function resolveCollision(a, b)
+    local dx = b.x - a.x
+    local dy = b.y - a.y
+    local dist = math.sqrt(dx*dx + dy*dy)
+    local radA = a:getRadius()
+    local radB = b:getRadius()
+    local minDist = radA + radB
+    if dist < minDist and dist > 0 then
+        local overlap = minDist - dist
+        local nx = dx / dist
+        local ny = dy / dist
+        a.x = a.x - nx * overlap * 0.5
+        a.y = a.y - ny * overlap * 0.5
+        b.x = b.x + nx * overlap * 0.5
+        b.y = b.y + ny * overlap * 0.5
+        
+        local vRel = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny
+        if vRel < 0 then
+            local impact = math.abs(vRel) * 1.5
+            if a.applyCollisionDamage then a:applyCollisionDamage(impact) end
+            if b.applyCollisionDamage then b:applyCollisionDamage(impact) end
+        end
+    end
+end
+
+
 function BulletScene:update(dt)
     self.bullManager:update(dt)
     self.itemManager:update(dt, self.player)
@@ -311,22 +337,41 @@ function BulletScene:update(dt)
 
         end
 
-        if drone.active and not drone.deathEffect then
-            table.remove(drone, i)
-            self.dronesChanged = true
+        if not drone.active and not drone.deathEffect then
+            -- удаляем дрон из списка, если он мёртв и эффект смерти завершён
+            for idx, d in ipairs(self.drones) do
+                if d == drone then
+                    table.remove(self.drones, idx)
+                    self.dronesChanged = true
+                    break
+                end
+            end
         end
     end
     
     if self.player and self.player.active then
 
-
         for k, bullet in pairs(self.bullManager.bullets) do 
             if bullet.owner == 'enemy' and self.player:checkCollision(bullet) then
-                self.player:takeDamage(bullet.damage, bullet)
+                self.player:bulletTakeDamage(bullet)
                 bullet.active = false
+            end
+            for _, drone in ipairs(self.drones) do
+                if drone.active then
+                    resolveCollision(self.player, drone)
+                end
             end
         end
 
+        for i = 1, #self.drones do
+            for j = i+1, #self.drones do
+                local a = self.drones[i]
+                local b = self.drones[j]
+                if a.active and b.active then
+                    resolveCollision(a, b)
+                end
+            end
+        end
 
     end
     

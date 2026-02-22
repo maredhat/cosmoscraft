@@ -37,7 +37,7 @@ function love.load()
     scenes:register('settings',    SettingsScene.new(scenes, settings))
     scenes:register('bullet',      BulletScene.new(scenes, settings, saveSelectionScene))
     -----------------------------------------------------------------------
-    scenes:switch("guitest", settings)
+    scenes:switch("menu", settings)
     -----------------------------------------------------------------------
 end
 -----------------------------------------------------------------------
