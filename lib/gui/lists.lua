@@ -3,30 +3,9 @@ Lists.__index = Lists
 
 local function clamp(low, val, high) return math.max(low, math.min(high, val)) end
 
-
---[[
-Lists.new(x, y, w, h, childrens, isVisible, options)
-    x, y, w, h – абсолютные координаты и размер списка
-    childrens   – начальные дочерние элементы (опционально)
-    isVisible   – видимость (по умолчанию true)
-    options = {
-        stretch             = false,           -- растягивать элементы по ширине
-        itemHeight          = 40,               -- высота каждого элемента
-        spacing             = 5,                -- отступ между элементами
-        hoverToScroll       = false,            -- прокрутка только при наведении
-        showScrollbar       = true,             -- показывать полосу прокрутки
-        scrollbarWidth      = 8,                -- ширина полосы
-        scrollbarGap        = 2,                -- отступ от контента до полосы
-        scrollbarColor      = {0.3,0.3,0.3,0.6}, -- цвет фона полосы
-        scrollbarThumbColor = {0.6,0.6,0.6,0.9}, -- цвет ползунка
-        scrollSpeed         = 5,                -- скорость плавной прокрутки
-        scrollStep          = 40,               -- шаг прокрутки колесом
-    }
-]]
-
 function Lists.new(x, y, w, h, childrens, isVisible, options)
     local self = setmetatable({}, Lists)
-    self.x = x              
+    self.x = x
     self.y = y
     self.w = w
     self.h = h
@@ -35,6 +14,8 @@ function Lists.new(x, y, w, h, childrens, isVisible, options)
     self.event = { onScroll = nil }
     self.other = {}
 
+    -- Добавлено поле scrollX (даже если не используется)
+    self.scrollX = 0
     self.scrollY = 0
     self.targetScrollY = 0
     self.contentH = 0
@@ -79,7 +60,9 @@ function Lists:_relayout()
         table.insert(items, { key = key, child = child, order = child.order or 0 })
     end
     table.sort(items, function(a, b)
-        if a.order == b.order then return tostring(a.key) < tostring(b.key) end
+        if a.order == b.order then
+            return tostring(a.key) < tostring(b.key)
+        end
         return a.order < b.order
     end)
 
@@ -88,7 +71,9 @@ function Lists:_relayout()
         local child = entry.child
         child.x = padL
         child.y = y
-        if self.stretch then child.w = innerW end
+        if self.stretch then
+            child.w = innerW
+        end
         child.h = self.itemHeight
         y = y + self.itemHeight + self.spacing
     end
@@ -100,7 +85,8 @@ function Lists:_updateContentSize()
     local maxY = 0
     for _, child in pairs(self.childrens) do
         if child.y and child.h then
-            maxY = math.max(maxY, child.y + child.h)
+            local bottom = child.y + child.h
+            if bottom > maxY then maxY = bottom end
         end
     end
     self.contentH = maxY
@@ -118,21 +104,27 @@ function Lists:scroll(dy)
     end
 end
 
-function Lists:onWheelMoved(_, y)
-    if self.hoverToScroll then
-        local mx, my = love.mouse.getPosition()
-        if mx < self.x or mx > self.x + self.w or my < self.y or my > self.y + self.h then return end
-    end
-    self:scroll(-y * self.scrollStep)
-end
-
 function Lists:mousepressed(mx, my, button)
-    if not self.isVisible or button ~= 1 then return end
+    if not self.isVisible then return end
+
+    -- Преобразуем абсолютные координаты в локальные для списка
+    local localX = mx - self.x + self.scrollX
+    local localY = my - self.y + self.scrollY
+
+    -- Передаём локальные координаты дочерним элементам
+    for _, child in pairs(self.childrens) do
+        if child.mousepressed then
+            child:mousepressed(localX, localY, button)
+        end
+    end
+
+    -- Обработка скроллбара (абсолютные координаты)
+    if button ~= 1 then return end
     if not self.showScrollbar or self.contentH <= self.h then return end
 
-    local barX   = self.x + self.w - self.scrollbarWidth - 2
-    local barY   = self.y + 2
-    local barH   = self.h - 4
+    local barX = self.x + self.w - self.scrollbarWidth - 2
+    local barY = self.y + 2
+    local barH = self.h - 4
     local thumbH = math.max(20, barH * (self.h / self.contentH))
     local thumbY = barY + (self.scrollY / (self.contentH - self.h)) * (barH - thumbH)
 
@@ -144,27 +136,70 @@ function Lists:mousepressed(mx, my, button)
     end
 end
 
-function Lists:mousereleased(_, _, button)
-    if button == 1 then self.draggingScrollbar = false end
+function Lists:mousereleased(mx, my, button)
+    if not self.isVisible then return end
+
+    local localX = mx - self.x + self.scrollX
+    local localY = my - self.y + self.scrollY
+    for _, child in pairs(self.childrens) do
+        if child.mousereleased then
+            child:mousereleased(localX, localY, button)
+        end
+    end
+
+    if button == 1 then
+        self.draggingScrollbar = false
+    end
 end
 
-function Lists:addChildren(key, child)
-    self.childrens[key] = child
-    self:_relayout()
-    return self
+function Lists:wheelmoved(x, y)
+    if not self.isVisible then return end
+
+    for _, child in pairs(self.childrens) do
+        if child.wheelmoved then
+            child:wheelmoved(x, y)
+        end
+    end
+
+    if self.hoverToScroll then
+        local mx, my = love.mouse.getPosition()
+        if mx < self.x or mx > self.x + self.w or my < self.y or my > self.y + self.h then return end
+    end
+    self:scroll(-y * self.scrollStep)
 end
 
-function Lists:removeChildren(key)
-    self.childrens[key] = nil
-    self:_relayout()
-    return self
+function Lists:keypressed(key, scancode, isrepeat)
+    if not self.isVisible then return end
+    for _, child in pairs(self.childrens) do
+        if child.keypressed then
+            child:keypressed(key, scancode, isrepeat)
+        end
+    end
+end
+
+function Lists:keyreleased(key, scancode)
+    if not self.isVisible then return end
+    for _, child in pairs(self.childrens) do
+        if child.keyreleased then
+            child:keyreleased(key, scancode)
+        end
+    end
+end
+
+function Lists:textinput(t)
+    if not self.isVisible then return end
+    for _, child in pairs(self.childrens) do
+        if child.textinput then
+            child:textinput(t)
+        end
+    end
 end
 
 function Lists:update(dt)
     if not self.isVisible then return end
 
     if self.draggingScrollbar then
-        local _, my = love.mouse.getPosition()
+        local mx, my = love.mouse.getPosition()
         local dy = my - self.dragStartY
         local barH = self.h - 4
         local thumbH = math.max(20, barH * (self.h / self.contentH))
@@ -180,6 +215,12 @@ function Lists:update(dt)
         self.scrollY = self.scrollY + diff * math.min(1, self.scrollSpeed * dt)
     else
         self.scrollY = self.targetScrollY
+    end
+
+    for _, child in pairs(self.childrens) do
+        if child.update then
+            child:update(dt)
+        end
     end
 end
 
@@ -231,6 +272,12 @@ function Lists:render()
 end
 
 function Lists:_event(key, cb) self.event[key] = cb; return self end
-function Lists:SelectChidren(key) return self.childrens[key] end
+function Lists:SelectChildren(key) return self.childrens[key] end
+
+function Lists:addChildren(key, child)
+    self.childrens[key] = child
+    self:_relayout()
+    return self
+end
 
 return Lists

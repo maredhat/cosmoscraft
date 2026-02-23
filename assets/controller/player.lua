@@ -1,6 +1,9 @@
 require 'lib.util.math'
 
+
 --------------------------------------------------------------------------------
+
+local Shaders = require 'lib.shaders'
 
 --------------------------------------------------------------------------------
 
@@ -86,10 +89,12 @@ function PlayerShip.new(x, y, s_x, s_y, tier, bulletManager)
 
 
     
-    self.trail = {}                 
-    self.trailTimer = 0             
-    self.trailInterval = 0.05       
+    self.trail = {}              
+    self.trailTimer = 0
+    self.trailInterval = 0.02     
     self.trailOffset = self.size_y + 16
+    self.trailLife = 1.5            
+    self.trailFadeSpeed = 1 / self.trailLife  
     return self
 end
 --------------------------------------------------------------------------------
@@ -251,6 +256,15 @@ function PlayerShip:load()
     local shipPath = Ships[self.tier].directSprite
     self.animation = SpriteLoader(shipPath)
     self.currentSprite = self.animation['idle'].sprite
+
+    Shaders.load('trailGlow', [[
+        extern float intensity = 1.0;
+        vec4 effect(vec4 color, Image tex, vec2 tc, vec2 sc) {
+            vec4 c = Texel(tex, tc) * color;
+            float bright = max(max(c.r, c.g), c.b);
+            return c + c * bright * intensity;
+        }
+    ]])
 end
 
 
@@ -262,39 +276,70 @@ function PlayerShip:update(dt)
 
     if self.invincibleTimer > 0 then self.invincibleTimer = self.invincibleTimer - dt end
     if self.hitFlash > 0 then self.hitFlash = self.hitFlash - dt end
+
+    -- Обновление чисел урона
     local i = 1
     while i <= #self.damageNumbers do
         local dmg = self.damageNumbers[i]
         dmg.timer = dmg.timer - dt
         dmg.alpha = dmg.timer * 2
         dmg.y = dmg.y - 20 * dt
-        if dmg.timer <= 0 then table.remove(self.damageNumbers, i) else i = i + 1 end
+        if dmg.timer <= 0 then
+            table.remove(self.damageNumbers, i)
+        else
+            i = i + 1
+        end
     end
 
     local ship = Ships[self.tier]
 
+    -- Чтение ввода
     local dx, dy = 0, 0
     self.isEngineOn = love.keyboard.isDown('w') or love.keyboard.isDown('s')
     if love.keyboard.isDown('w') then dy = dy - 1 end
     if love.keyboard.isDown('s') then dy = dy + 1 end
 
-    local speed = math.sqrt(self.vx^2 + self.vy^2)
-    local minSpeedForTurn = 20
+    -- Определяем текущие параметры движения (обычные или спринт)
+    local currentAccel = self.acceleration
+    local currentMaxSpeed = self.maxSpeed
 
-    local angularAccel = 0
-    if speed > minSpeedForTurn then
-        if love.keyboard.isDown('a') then
-            angularAccel = angularAccel - ship.speedRotation * 2
+    if love.keyboard.isDown('lshift') and self.stamina > 0 and self.isEngineOn and self.stamina >= (ship.minStaminaForSprint or 0) then
+        currentAccel = self.sprintAcceleration
+        currentMaxSpeed = self.sprintMaxSpeed
+        self.stamina = self.stamina - (ship.staminaExpenditure or 0) * dt
+        if self.stamina < 0 then self.stamina = 0 end
+        self.currentSprite = self.animation.sprint.sprite
+    else
+        if self.stamina < self.staminaMax then
+            self.stamina = math.min(self.stamina + (ship.staminaTimeRegen or 1.5) * dt, self.staminaMax)
         end
-        if love.keyboard.isDown('d') then
-            angularAccel = angularAccel + ship.speedRotation * 2
-        end
+        self.currentSprite = self.isEngineOn and self.animation.engine_turn.sprite or self.animation.idle.sprite
     end
 
-    self.angularVelocity = (self.angularVelocity or 0) + angularAccel * dt
+    -- Поворот с учётом скорости движения
+    local speed = math.sqrt(self.vx^2 + self.vy^2)
+    local turnBaseSpeed = ship.speedRotation * 2   -- максимальное угловое ускорение
+    local minSpeedForTurn = 5                       -- ниже этой скорости поворот невозможен
+    local maxSpeedForTurn = currentMaxSpeed         -- при этой скорости поворот достигает максимума
+
+    local turnFactor = 0
+    if speed > minSpeedForTurn then
+        turnFactor = math.min(1, (speed - minSpeedForTurn) / (maxSpeedForTurn - minSpeedForTurn))
+    end
+
+    local angularAccel = 0
+    if love.keyboard.isDown('a') then
+        angularAccel = angularAccel - turnBaseSpeed * turnFactor
+    end
+    if love.keyboard.isDown('d') then
+        angularAccel = angularAccel + turnBaseSpeed * turnFactor
+    end
+
+    self.angularVelocity = self.angularVelocity + angularAccel * dt
     self.angularVelocity = self.angularVelocity * (1 - (self.angularFriction or 3.0) * dt)
     self.angle = self.angle + self.angularVelocity * dt
 
+    -- Боковой импульс при повороте
     if angularAccel ~= 0 then
         local rightX = math.cos(self.angle)
         local rightY = math.sin(self.angle)
@@ -308,22 +353,7 @@ function PlayerShip:update(dt)
         end
     end
 
-    local currentAccel = self.acceleration
-    local currentMaxSpeed = self.maxSpeed
-
-    if love.keyboard.isDown('lshift') and self.stamina > 0 and self.isEngineOn then
-        currentAccel = self.sprintAcceleration
-        currentMaxSpeed = self.sprintMaxSpeed
-        self.stamina = self.stamina - (ship.staminaExpenditure or 0) * dt
-        if self.stamina < 0 then self.stamina = 0 end
-        self.currentSprite = self.animation.sprint.sprite
-    else
-        if self.stamina < self.staminaMax then
-            self.stamina = math.min(self.stamina + (ship.staminaTimeRegen or 1.5) * dt, self.staminaMax)
-        end
-        self.currentSprite = self.isEngineOn and self.animation.engine_turn.sprite or self.animation.idle.sprite
-    end
-
+    -- Ускорение вперёд/назад
     if self.isEngineOn then
         local forwardX = math.cos(self.angle - math.pi/2)
         local forwardY = math.sin(self.angle - math.pi/2)
@@ -333,6 +363,7 @@ function PlayerShip:update(dt)
         self.vy = self.vy + accelY
     end
 
+    -- Разделение скорости на продольную и поперечную для эффекта дрифта
     local forwardX = math.cos(self.angle - math.pi/2)
     local forwardY = math.sin(self.angle - math.pi/2)
     local rightX = math.cos(self.angle)
@@ -347,35 +378,39 @@ function PlayerShip:update(dt)
     self.vx = forwardSpeed * forwardX + rightSpeed * rightX
     self.vy = forwardSpeed * forwardY + rightSpeed * rightY
 
+    -- Ограничение максимальной скорости
     speed = math.sqrt(self.vx^2 + self.vy^2)
     if speed > currentMaxSpeed then
         self.vx = self.vx / speed * currentMaxSpeed
         self.vy = self.vy / speed * currentMaxSpeed
     end
 
+    -- Перемещение
     self.x = self.x + self.vx * dt
     self.y = self.y + self.vy * dt
 
-
+    -- Трейл (след)
     local speed = math.sqrt(self.vx^2 + self.vy^2)
     self.trailTimer = self.trailTimer - dt
     if speed > 20 and self.trailTimer <= 0 then
-        self.trailTimer = self.trailTimer + self.trailInterval  
+        self.trailTimer = self.trailTimer + self.trailInterval
         local backDirX = -math.cos(self.angle - math.pi/2)
         local backDirY = -math.sin(self.angle - math.pi/2)
         local backX = self.x + backDirX * self.trailOffset
         local backY = self.y + backDirY * self.trailOffset
-        table.insert(self.trail, {x = backX, y = backY, alpha = 1})
+        table.insert(self.trail, {x = backX, y = backY, timer = self.trailLife})
     end
 
+    -- Обновление таймеров трейла и удаление старых частиц
     for i = #self.trail, 1, -1 do
         local p = self.trail[i]
-        p.alpha = p.alpha - dt * 2  
-        if p.alpha <= 0 then
+        p.timer = p.timer - dt
+        if p.timer <= 0 then
             table.remove(self.trail, i)
         end
     end
 
+    -- Стрельба
     self.__bulletCoolDown = (self.__bulletCoolDown > 0) and self.__bulletCoolDown - dt or self.__bulletCoolDown
     if love.keyboard.isDown('space') and self.__bulletCoolDown <= 0 then
         self:shoot()
@@ -393,19 +428,32 @@ function PlayerShip:draw()
     end
     
     if not self.active then return end
-    
 
-    for _, p in ipairs(self.trail) do
-        love.graphics.setColor(1, 1, 1, p.alpha)
-        love.graphics.circle("fill", p.x, p.y, 4)
+    -- Рисуем след как линию, соединяющую точки
+    if #self.trail > 1 then
+        love.graphics.setLineWidth(6)
+        love.graphics.setLineJoin("bevel")
+        love.graphics.setLineStyle("smooth")
+        for i = #self.trail, 2, -1 do
+            local p1 = self.trail[i-1]
+            local p2 = self.trail[i]
+            -- Проверяем наличие поля timer (на случай, если какие-то старые точки без него)
+            if p1.timer and p2.timer then
+                local alpha = (p1.timer + p2.timer) / (2 * self.trailLife)
+                love.graphics.setColor(1, 1, 1, alpha)
+                love.graphics.line(p1.x, p1.y, p2.x, p2.y)
+            end
+        end
     end
 
+    -- Мигание при получении урона (без изменений)
     if self.hitFlash > 0 and math.floor(self.hitFlash * 20) % 2 == 0 then
         love.graphics.setColor(1, 1, 1, 0.5)
     else
         love.graphics.setColor(1, 1, 1, 1)
     end
     
+    -- Рисуем корабль
     if self.currentSprite then
         love.graphics.draw(
             self.currentSprite,
@@ -417,6 +465,7 @@ function PlayerShip:draw()
         error("Sprite not loaded for ship")
     end
 
+    -- Рисуем числа урона
     for _, dmg in ipairs(self.damageNumbers) do
         love.graphics.setColor(1, 0, 0, dmg.alpha)
         love.graphics.print("-" .. dmg.amount, dmg.x - 10, dmg.y)

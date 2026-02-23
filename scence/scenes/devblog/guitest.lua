@@ -3,6 +3,7 @@ local Lists     = require 'lib.gui.lists'
 local Slider    = require 'lib.gui.slider'
 local Checkbox  = require 'lib.gui.checkbox'
 local Dropdown  = require 'lib.gui.dropdown'
+local TextBox   = require 'lib.gui.textbox'
 
 local GuiTest = {}
 GuiTest.__index = GuiTest
@@ -52,7 +53,7 @@ function GuiTest.new(settings)
                 vertical = false,
                 min = 0,
                 max = 100,
-                value = 30,
+                value = 0,
                 thumbSize = 15,
                 bgColor = {0.2, 0.2, 0.2, 0.8},
                 thumbColor = {0.8, 0.5, 0.2, 1},
@@ -75,7 +76,7 @@ function GuiTest.new(settings)
             }
         ),
         dropdown = Dropdown.new(
-            invX + 50, invY + 400, 200, 30,  -- добавил 30 как высоту
+            invX + 50, invY + 400, 200, 30,
             {
                 items = { "Option A", "Option B", "Option C", "Option D", "Option E", "Option F", "Option G" },
                 selectedIndex = 1,
@@ -86,6 +87,24 @@ function GuiTest.new(settings)
                 end
             }
         ),
+        textInput = TextBox.new(
+            invX + 50, invY + 450, 300, 30,
+            {
+                placeholder = "Insert text...",
+                maxLength = 50,
+                fontSize = 16,
+                bgColor = {0.15, 0.15, 0.2, 0.9},
+                textColor = {1, 1, 1, 1},
+                placeholderColor = {0.5, 0.5, 0.5, 1},
+                focusBorderColor = {0.3, 0.7, 1, 1},
+                onChange = function(text)
+                    
+                end,
+                onEnter = function(text)
+                    
+                end
+            }
+        )
     })
 
     local list = self.inventory.childrens.craftsLists
@@ -147,52 +166,35 @@ end
 
 function GuiTest:update(dt)
     self.inventory:update(dt)
-    if self.inventory.childrens.slider then
-        self.inventory.childrens.slider:update(dt)
-    end
-    if self.inventory.childrens.dropdown then
-        self.inventory.childrens.dropdown:update(dt)
-    end
 end
 
 function GuiTest:draw()
     self.inventory:draw()
 end
 
+-- Все вызовы унифицированы: используем wheelmoved, а не onWheelMoved
 function GuiTest:wheelmoved(x, y)
-    if self.inventory.childrens.craftsLists then
-        self.inventory.childrens.craftsLists:onWheelMoved(x, y)
-    end
-    if self.inventory.childrens.dropdown and self.inventory.childrens.dropdown.expanded then
-        self.inventory.childrens.dropdown.list:onWheelMoved(x, y)
-    end
+    self.inventory:wheelmoved(x, y)
 end
 
 function GuiTest:mousepressed(mx, my, button)
-    if self.inventory.childrens.craftsLists then
-        self.inventory.childrens.craftsLists:mousepressed(mx, my, button)
-    end
-    if self.inventory.childrens.slider then
-        self.inventory.childrens.slider:mousepressed(mx, my, button)
-    end
-    if self.inventory.childrens.checkbox then
-        self.inventory.childrens.checkbox:mousepressed(mx, my, button)
-    end
-    if self.inventory.childrens.dropdown then
-        self.inventory.childrens.dropdown:mousepressed(mx, my, button)
-    end
+    self.inventory:mousepressed(mx, my, button)
 end
 
 function GuiTest:mousereleased(mx, my, button)
-    if self.inventory.childrens.craftsLists then
-        self.inventory.childrens.craftsLists:mousereleased(mx, my, button)
-    end
-    if self.inventory.childrens.slider then
-        self.inventory.childrens.slider:mousereleased(mx, my, button)
-    end
-    if self.inventory.childrens.dropdown then
-        self.inventory.childrens.dropdown:mousereleased(mx, my, button)
-    end
+    self.inventory:mousereleased(mx, my, button)
+end
+
+function GuiTest:textinput(t)
+    self.inventory:textinput(t)
+end
+
+function GuiTest:keypressed(key, scancode, isrepeat)
+    self.inventory:keypressed(key, scancode, isrepeat)
+end
+
+function GuiTest:keyreleased(key, scancode)
+    self.inventory:keyreleased(key, scancode)
 end
 
 return GuiTest

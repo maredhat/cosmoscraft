@@ -4,22 +4,23 @@ local Lists = require 'lib.gui.lists'
 local Dropdown = {}
 Dropdown.__index = Dropdown
 
-
 --[[
 Dropdown.new(x, y, width, height, options)
     x, y, width, height – абсолютные координаты и размер основной кнопки
+
     options = {
-        items           = {},              -- массив элементов (строки или таблицы {text, value})
-        selectedIndex   = 1,                -- индекс выбранного элемента
-        itemHeight      = 30,               -- высота каждого пункта списка
-        maxListHeight   = 200,              -- максимальная высота выпадающего списка
-        bgColor         = {0.2,0.2,0.2,1},  -- цвет кнопки
-        textColor       = {1,1,1,1},        -- цвет текста
-        hoverColor      = {0.3,0.3,0.3,1},  -- цвет подсветки при наведении
-        borderColor     = {0.5,0.5,0.5,1},  -- цвет рамки
-        onSelect        = function(item)    -- колбэк при выборе элемента
+        items           = {},           -- массив элементов (строки или {text, value})
+        selectedIndex   = 1,            -- индекс выбранного элемента
+        itemHeight      = 30,           -- высота каждого пункта
+        maxListHeight   = 200,          -- максимальная высота выпадающего списка
+        bgColor         = {0.2,0.2,0.2,1},
+        textColor       = {1,1,1,1},
+        hoverColor      = {0.3,0.3,0.3,1},
+        borderColor     = {0.5,0.5,0.5,1},
+        onSelect        = function(item) end,
     }
 ]]
+
 function Dropdown.new(x, y, width, height, options)
     local self = setmetatable({}, Dropdown)
     self.x = x
@@ -40,7 +41,6 @@ function Dropdown.new(x, y, width, height, options)
     self.maxListHeight = options.maxListHeight or 200
     self.onSelect = options.onSelect
 
-    -- Создаём Lists для выпадающей части
     self.list = Lists.new(
         self.x, self.y + self.h,
         self.w,
@@ -57,6 +57,7 @@ function Dropdown.new(x, y, width, height, options)
             scrollbarGap = 2
         }
     )
+    self.list.isVisible = false
 
     for i, item in ipairs(self.items) do
         local text = type(item) == "table" and item.text or tostring(item)
@@ -70,6 +71,12 @@ function Dropdown.new(x, y, width, height, options)
                 love.graphics.rectangle("fill", self.x, self.y, self.w, self.h)
                 love.graphics.setColor(1,1,1,1)
                 love.graphics.print(self.text, self.x + 10, self.y + self.h/2 - 6)
+            end,
+            mousepressed = function(_, mx, my, button)
+                if mx >= self.x and mx <= self.x + self.w and my >= self.y and my <= self.y + self.h then
+                    self:setSelected(i)
+                    self:close()
+                end
             end
         })
     end
@@ -77,16 +84,12 @@ function Dropdown.new(x, y, width, height, options)
     return self
 end
 
-function Dropdown:getSelected()
-    return self.items[self.selectedIndex]
-end
+function Dropdown:getSelected() return self.items[self.selectedIndex] end
 
 function Dropdown:setSelected(index)
     if index >= 1 and index <= #self.items then
         self.selectedIndex = index
-        if self.onSelect then
-            self.onSelect(self.items[index])
-        end
+        if self.onSelect then self.onSelect(self.items[index]) end
     end
 end
 
@@ -100,9 +103,10 @@ function Dropdown:close()
     self.list.isVisible = false
 end
 
+-- Передача событий
 function Dropdown:mousepressed(mx, my, button)
-    if not self.visible or button ~= 1 then return end
-
+    if not self.visible then return end
+    
     if mx >= self.x and mx <= self.x + self.w and my >= self.y and my <= self.y + self.h then
         self:toggle()
         return
@@ -110,16 +114,8 @@ function Dropdown:mousepressed(mx, my, button)
 
     if self.expanded then
         self.list:mousepressed(mx, my, button)
-
-        local listY = self.y + self.h
-        if mx >= self.x and mx <= self.x + self.w and my >= listY and my <= listY + self.list.h then
-            local localY = my - listY + self.list.scrollY
-            local index = math.floor(localY / self.itemHeight) + 1
-            if index >= 1 and index <= #self.items then
-                self:setSelected(index)
-                self:close()
-            end
-        else
+        
+        if not (mx >= self.x and mx <= self.x + self.w and my >= self.y + self.h and my <= self.y + self.h + self.list.h) then
             self:close()
         end
     end
@@ -128,6 +124,12 @@ end
 function Dropdown:mousereleased(mx, my, button)
     if self.expanded then
         self.list:mousereleased(mx, my, button)
+    end
+end
+
+function Dropdown:wheelmoved(x, y)
+    if self.expanded then
+        self.list:wheelmoved(x, y)
     end
 end
 

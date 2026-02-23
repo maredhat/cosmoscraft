@@ -11,16 +11,12 @@ local _condition_events = {
 local Frame = {}
 Frame.__index = Frame
 
-
 --[[
 Frame.new(x, y, w, h, childrens, isVisible)
     x, y, w, h – абсолютные координаты и размер
     childrens   – таблица дочерних элементов (ключ-значение)
     isVisible   – видимость фрейма (по умолчанию true)
-    События: onHover, onClick, onHold, onEnter, onAdded – устанавливаются через :_event()
 ]]
-
-
 
 function Frame.new(x, y, w, h, childrens, isVisiable)
     local self = setmetatable({}, Frame)
@@ -44,13 +40,13 @@ end
 
 function Frame:_event(key, cb) self.event[key] = cb; return self end
 function Frame:addChildren(key, child) self.childrens[key] = child; return self end
-function Frame:SelectChidren(key) return self.childrens[key] end
+function Frame:SelectChildren(key) return self.childrens[key] end
 
 function Frame:update(dt)
     if self.isVisiable then
         local mx, my = love.mouse.getPosition()
         for key, cb in pairs(self.event) do
-            if cb and _condition_events[key](self, mx, my) then
+            if cb and _condition_events[key] and _condition_events[key](self, mx, my) then
                 cb({mx, my})
             end
         end
@@ -59,6 +55,54 @@ function Frame:update(dt)
         end
     end
     return self
+end
+
+function Frame:mousepressed(mx, my, button)
+    if self.isVisiable then
+        for _, child in pairs(self.childrens) do
+            if child.mousepressed then child:mousepressed(mx, my, button) end
+        end
+    end
+end
+
+function Frame:mousereleased(mx, my, button)
+    if self.isVisiable then
+        for _, child in pairs(self.childrens) do
+            if child.mousereleased then child:mousereleased(mx, my, button) end
+        end
+    end
+end
+
+function Frame:wheelmoved(x, y)
+    if self.isVisiable then
+        for _, child in pairs(self.childrens) do
+            if child.wheelmoved then child:wheelmoved(x, y) end
+        end
+    end
+end
+
+function Frame:keypressed(key, scancode, isrepeat)
+    if self.isVisiable then
+        for _, child in pairs(self.childrens) do
+            if child.keypressed then child:keypressed(key, scancode, isrepeat) end
+        end
+    end
+end
+
+function Frame:keyreleased(key, scancode)
+    if self.isVisiable then
+        for _, child in pairs(self.childrens) do
+            if child.keyreleased then child:keyreleased(key, scancode) end
+        end
+    end
+end
+
+function Frame:textinput(t)
+    if self.isVisiable then
+        for _, child in pairs(self.childrens) do
+            if child.textinput then child:textinput(t) end
+        end
+    end
 end
 
 function Frame:draw()

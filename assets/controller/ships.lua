@@ -4,7 +4,7 @@ local Ships = {
         hitPoints = 100,
         armor = 100,
         speedMovement = 100,
-        speedRotation = 2,
+        speedRotation = 3,
         speedAttack = 1,
         speedSprint = 1.5,
         bulletConfig = {
@@ -19,15 +19,15 @@ local Ships = {
             coolDown = 0.35            -- Время для выстрела в сек
         },
         staminaTimeRegen   = 1.5,
-        staminaExpenditure = 0,
+        staminaExpenditure = 15,
         staminaCounter     = 150,
         acceleration       = 400,  
         maxSpeed           = 600,   
         friction           = 0.5,
         sprintAcceleration = 400,
         sprintMaxSpeed     = 700,   
-        angularVelocity    = 0.1,
-        angularFriction    = 0.8
+        angularVelocity    = 0.2,
+        angularFriction    = 0.5
     },
     [2] = 
     {

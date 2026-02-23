@@ -44,11 +44,23 @@ function SceneManager:switchWithTransition(name, transition, duration, ...)
     if not self.scenes[name] then
         error("Scene '" .. name .. "' not found")
     end
+    if self.next then return end
+
+    if self.current and self.scenes[self.current].onLeave then
+        self.scenes[self.current]:onLeave()
+    end
+
     self.transition = transition or "fade"
     self.transitionDuration = duration or 0.5
     self.transitionTimer = 0
     self.next = name
     self.nextArgs = {...}
+
+    if type(transition) == "function" then
+        self.transitionDraw = transition
+    else
+        self.transitionDraw = nil
+    end
 end
 
 function SceneManager:update(dt)
@@ -92,22 +104,27 @@ function SceneManager:draw()
 end
 
 function SceneManager:_drawTransition()
-    local alpha = self.transitionTimer / self.transitionDuration
+    local t = self.transitionTimer / self.transitionDuration
     local w, h = love.graphics.getWidth(), love.graphics.getHeight()
+
+    if self.transitionDraw then
+        self.transitionDraw(t, w, h)
+        return
+    end
+
     if self.transition == "fade" then
-        love.graphics.setColor(0, 0, 0, alpha)
+        love.graphics.setColor(0, 0, 0, t)
         love.graphics.rectangle("fill", 0, 0, w, h)
     elseif self.transition == "slide" then
-        local x = w * (1 - alpha)
+        local x = w * (1 - t)
         love.graphics.setColor(0, 0, 0, 1)
         love.graphics.rectangle("fill", x, 0, w, h)
     elseif self.transition == "zoom" then
-        local scale = 1 + (1 - alpha) * 0.5
         love.graphics.push()
         love.graphics.translate(w/2, h/2)
-        love.graphics.scale(scale, scale)
+        love.graphics.scale(1 + (1 - t) * 0.5, 1 + (1 - t) * 0.5)
         love.graphics.translate(-w/2, -h/2)
-        love.graphics.setColor(0, 0, 0, 1 - alpha)
+        love.graphics.setColor(0, 0, 0, 1 - t)
         love.graphics.rectangle("fill", 0, 0, w, h)
         love.graphics.pop()
     end

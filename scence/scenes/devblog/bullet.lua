@@ -17,6 +17,8 @@ BulletScene.__index = BulletScene
 function BulletScene.new(manager, settings, saveSlot)
     local self = setmetatable({}, BulletScene)
     
+    self.worldSize = { x = 10000, y = 10000 }
+
     self.manager = manager
     self.settings = settings
     self.saveSlot = saveSlot or 1
@@ -31,14 +33,14 @@ function BulletScene.new(manager, settings, saveSlot)
     self.gridColor = {0.2, 0.2, 0.3, 0.15}
     
     self.worldBounds = {
-        left = -10000,
-        right = 10000,
-        top = -10000,
-        bottom = 10000
+        left = -self.worldSize.x,
+        right = self.worldSize.x,
+        top = -self.worldSize.y,
+        bottom = self.worldSize.y
     }
     
     self.drones = {}
-    self:spawnRandomDrones(200)
+    self:spawnRandomDrones(80)
     
     self.dronesChanged = true
     
@@ -77,15 +79,14 @@ end
 
 function BulletScene:spawnRandomDrones(count)
     for i = 1, count do
-        local x = math.random(-4000, 4000)
-        local y = math.random(-4000, 4000)
+        local x = math.random(-self.worldSize.x, self.worldSize.x)
+        local y = math.random(-self.worldSize.y, self.worldSize.y)
         while math.abs(x) < 500 and math.abs(y) < 500 do
-            x = math.random(-4000, 4000)
-            y = math.random(-4000, 4000)
+            x = math.random(-self.worldSize.x, self.worldSize.x)
+            y = math.random(-self.worldSize.y, self.worldSize.y)
         end
         local drone = Drone.new(x, y, self.bullManager, self.player, 1, self)
         table.insert(self.drones, drone)
-        
     end
 end
 
@@ -338,7 +339,6 @@ function BulletScene:update(dt)
         end
 
         if not drone.active and not drone.deathEffect then
-            -- удаляем дрон из списка, если он мёртв и эффект смерти завершён
             for idx, d in ipairs(self.drones) do
                 if d == drone then
                     table.remove(self.drones, idx)

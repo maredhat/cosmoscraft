@@ -81,11 +81,8 @@ function love.wheelmoved(x, y)
 end
 
 function love.resize(w, h)
-    if scenes and scenes.getCurrentScene then
-        local scene = scenes:getCurrentScene()
-        if scene and scene.resize then
-            scene:resize(w, h)
-        end
+    if currentScene and currentScene.onResize then
+        currentScene:onResize(w, h)
     end
 end
 

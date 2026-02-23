@@ -1,20 +1,20 @@
 local Checkbox = {}
 Checkbox.__index = Checkbox
 
-local function clamp(low, val, high) return math.max(low, math.min(high, val)) end
-
 --[[
 Checkbox.new(x, y, w, h, options)
     x, y, w, h – абсолютные координаты и размер чекбокса
+
     options = {
-        checked      = false,           -- начальное состояние (true/false)
-        bgColor      = {0.9,0.9,0.9,1}, -- цвет фона (RGBA)
-        checkColor   = {0.2,0.6,1,1},   -- цвет галочки
-        borderColor  = {0.3,0.3,0.3,1}, -- цвет рамки
-        borderRadius = 3,                -- радиус скругления углов
-        onChange     = function(checked) -- колбэк при изменении состояния
+        checked      = false,
+        bgColor      = {0.9,0.9,0.9,1},
+        checkColor   = {0.2,0.6,1,1},
+        borderColor  = {0.3,0.3,0.3,1},
+        borderRadius = 3,
+        onChange     = function(checked) end
     }
 ]]
+
 function Checkbox.new(x, y, w, h, options)
     local self = setmetatable({}, Checkbox)
     self.x = x
@@ -39,31 +39,24 @@ function Checkbox:isChecked() return self.checked end
 function Checkbox:setChecked(state)
     if self.checked ~= state then
         self.checked = state
-        if self.onChange then
-            self.onChange(self.checked)
-        end
+        if self.onChange then self.onChange(self.checked) end
     end
 end
 
-function Checkbox:toggle()
-    self:setChecked(not self.checked)
-end
+function Checkbox:toggle() self:setChecked(not self.checked) end
 
 function Checkbox:mousepressed(mx, my, button)
     if not self.visible or button ~= 1 then return end
-    if mx >= self.x and mx <= self.x + self.w and
-       my >= self.y and my <= self.y + self.h then
+    if mx >= self.x and mx <= self.x + self.w and my >= self.y and my <= self.y + self.h then
         self:toggle()
     end
 end
 
--- Отрисовка
 function Checkbox:draw()
     if not self.visible then return end
 
     love.graphics.setColor(self.bgColor)
     love.graphics.rectangle("fill", self.x, self.y, self.w, self.h, self.borderRadius)
-
     love.graphics.setColor(self.borderColor)
     love.graphics.setLineWidth(1)
     love.graphics.rectangle("line", self.x, self.y, self.w, self.h, self.borderRadius)
