@@ -7,7 +7,7 @@ function Item.new(x, y, itemConfig)
     self.y = y or 0
     self.config = itemConfig
     self.sprite = love.graphics.newImage(itemConfig.sprite)
-    self.width = self.sprite:getWidth()
+    self.width  = self.sprite:getWidth()
     self.height = self.sprite:getHeight()
     self.radius = math.max(self.width, self.height) / 2
     self.active = true
@@ -26,9 +26,9 @@ end
 
 function Item:update(dt)
     if not self.active then return end
-    self.angle = self.angle + self.rotationSpeed * dt
-    self.floatOffset = math.sin(love.timer.getTime() * self.floatSpeed) * 5
-    self.glowIntensity = 0.5 + 0.5 * math.sin(love.timer.getTime() * self.glowSpeed)
+    self.angle          = self.angle + self.rotationSpeed * dt
+    self.floatOffset    = math.sin(love.timer.getTime() * self.floatSpeed) * 5
+    self.glowIntensity  = 0.5 + 0.5 * math.sin(love.timer.getTime() * self.glowSpeed)
 end
 
 function Item:draw()
@@ -57,9 +57,14 @@ function Item:getRadius()
     return self.radius
 end
 
-function Item:pickup(player)
-    local state_logic_pickup = self.config.logic(player)
-    if state_logic_pickup == true then self.active = false end
+function Item:pickup(player, isResource, inventory)
+    isResource = isResource or false
+    if isResource == false then
+        local state_logic_pickup = self.config.logic(player)
+        if state_logic_pickup == true then self.active = false end
+    else
+        self.active = false 
+    end
 end
 
 return Item

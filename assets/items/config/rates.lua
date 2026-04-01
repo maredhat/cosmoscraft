@@ -2,8 +2,8 @@ return
 {
     drone = 
     {
-        {name = "iron",  chance = 0.15},
-        {name = "armor", chance = 0.15},
-        {name = 'fuel',  chance = 0.30}
+        {name = "iron",  chance = 1},
+        {name = "armor", chance = 1},
+        {name = 'fuel',  chance = 1}
     }
 }

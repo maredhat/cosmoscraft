@@ -17,7 +17,7 @@ function ItemManager:addItem(x, y, itemName)
     return item
 end
 
-function ItemManager:update(dt, player)
+function ItemManager:update(dt, player, inventory)
     local i = 1
     while i <= #self.items do
         local item = self.items[i]
@@ -28,7 +28,7 @@ function ItemManager:update(dt, player)
             local dy = item.y - player.y
             local dist = math.sqrt(dx*dx + dy*dy)
             if dist < 30 + item.radius then
-                item:pickup(player)
+                item:pickup(player, false)
             end
         end
 

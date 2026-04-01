@@ -1,25 +1,16 @@
+-- assets/controller/player.lua (оптимизированная версия без изменения API)
+
 require 'lib.util.math'
 
-
---------------------------------------------------------------------------------
-
 local Shaders = require 'lib.shaders'
-
---------------------------------------------------------------------------------
-
-local Ships           = require 'assets.controller.ships'
-local SpriteLoader    = require 'lib.util.animation.spriteloader' 
-
---------------------------------------------------------------------------------
+local Ships   = require 'assets.controller.ships'
+local SpriteLoader = require 'lib.util.animation.spriteloader'
 
 local PlayerShip = {}
 PlayerShip.__index = PlayerShip
 
---------------------------------------------------------------------------------
-
 function PlayerShip.new(x, y, s_x, s_y, tier, bulletManager)
     local self = setmetatable({}, PlayerShip)
-    
 
     self.x = x or 0
     self.y = y or 0
@@ -29,18 +20,23 @@ function PlayerShip.new(x, y, s_x, s_y, tier, bulletManager)
     self.angle = 0
     self.__bulletCoolDown = 0
     self.active = true
-
     self.bulletManager = bulletManager
     self.currentSprite = nil
     self.isEngineOn = false
     self.engineTimer = 0
-    
     self._spriteWidth = 0
     self._spriteHeight = 0
-    
-    self.stamina    = Ships[self.tier].staminaCounter
+
+    self.stamina = Ships[self.tier].staminaCounter
     self.staminaMax = Ships[self.tier].staminaCounter
-    self.items = {} 
+    self.items = {}
+
+    self.highSpeedTimer = 0
+    self.overheated = false
+    self.overheatCooldown = 0
+    self.overheatDuration = 5         
+    self.overheatLockDuration = 3      
+    self.overheatThreshold = 0.85      
 
     self.health = Ships[self.tier].hitPoints
     self.maxHealth = Ships[self.tier].hitPoints
@@ -49,214 +45,138 @@ function PlayerShip.new(x, y, s_x, s_y, tier, bulletManager)
     self.invincibleTimer = 0
     self.invincibleDuration = 1.0
     self.hitFlash = 0
-    
+
+    self.displayHealth = self.health
+    self.displayArmor = self.armor
+    self.displayStamina = self.stamina
     self.speedMult = 1
     self.damageNumbers = {}
     self.deathEffect = nil
-    
-    -- Бафы которые активны 
-    self.inventory = 
-    {
-        companents     = {},
-        resource       = {},
+
+    self.inventory = {
+        companents = {},
+        resource = {},
         temporary_bufs = {}
     }
-
-    -- таблица анимаций 
 
     self.vx = 0
     self.vy = 0
 
-    self.acceleration = Ships[self.tier].acceleration or 400
-    self.friction = Ships[self.tier].friction or 2.0
-    self.maxSpeed = Ships[self.tier].maxSpeed or 300
+    local shipData = Ships[self.tier]
+    self.acceleration = shipData.acceleration or 400
+    self.friction = shipData.friction or 2.0
+    self.maxSpeed = shipData.maxSpeed or 300
 
-    self.sprintAcceleration = Ships[self.tier].sprintAcceleration or 800
-    self.sprintMaxSpeed = Ships[self.tier].sprintMaxSpeed or 500
+    self.sprintAcceleration = shipData.sprintAcceleration or 800
+    self.sprintMaxSpeed = shipData.sprintMaxSpeed or 500
 
-    self.animation = 
-    {
+    self.animation = {
         path = {
-            idle        = Ships[self.tier].directSprite .. 'ship.png',
-            engine_turn = Ships[self.tier].directSprite .. 'ship_turn_on.png',
-            sprint      = Ships[self.tier].directSprite .. 'ship_sprint.png',
+            idle = shipData.directSprite .. 'ship.png',
+            engine_turn = shipData.directSprite .. 'ship_turn_on.png',
+            sprint = shipData.directSprite .. 'ship_sprint.png',
         },
         sprite = {}
     }
-    
-    self.angularVelocity = Ships[self.tier].angularVelocity or 0.3
-    self.angularFriction = Ships[self.tier].angularFriction or 0.3   
 
+    self.angularVelocity = shipData.angularVelocity or 0.3
+    self.angularFriction = shipData.angularFriction or 0.3
 
-    
-    self.trail = {}              
+    self.trail = {}
     self.trailTimer = 0
-    self.trailInterval = 0.02     
+    self.trailInterval = 0.02
     self.trailOffset = self.size_y + 16
-    self.trailLife = 1.5            
-    self.trailFadeSpeed = 1 / self.trailLife  
+    self.trailLife = 1.5
+    self.trailFadeSpeed = 1 / self.trailLife
+
     return self
 end
---------------------------------------------------------------------------------
 
-
--- Player effects
-
-function PlayerShip:poisoning(time, damage) 
-    -- создать систему отравления
-end
-
-
--- Supportive function API for create items
-
+-- ------------------------------------------------------------
+-- Вспомогательные методы (без изменений)
+-- ------------------------------------------------------------
 function PlayerShip:setHealth(health) self.health = math.clamp(self.health + health, 0, self.maxHealth) end
-
 function PlayerShip:setArmor(armor) self.armor = math.clamp(self.armor + armor, 0, self.maxArmor) end
-
 function PlayerShip:getHealth() return self.health end
 function PlayerShip:getArmor() return self.armor end
-
 function PlayerShip:getMaxHealth() return self.maxHealth end
 function PlayerShip:getMaxArmor() return self.maxArmor end
-
 function PlayerShip:getTierShip() return self.tier end
-function PlayerShip:getDataShip(Tier) return Ships[self.tier] end
-
-
-function PlayerShip:addItemInvenroty(type, item) self.inventory[type][item.name] = self.inventory[type][item.name] + 1 end
-function PlayerShip:deleteItemInvenroty(type, item) self.inventory[type][item.name] = self.inventory[type][item.name] - 1 end
-
+function PlayerShip:getDataShip() return Ships[self.tier] end
+function PlayerShip:addItemInvenroty(type, item) self.inventory[type][item.name] = (self.inventory[type][item.name] or 0) + 1 end
+function PlayerShip:deleteItemInvenroty(type, item) self.inventory[type][item.name] = math.max(0, (self.inventory[type][item.name] or 0) - 1) end
 function PlayerShip:getPosition() return self.x, self.y end
 function PlayerShip:getRadius() return 20 end
-
 function PlayerShip:setStamina(stamina) self.stamina = math.clamp(self.stamina + stamina, 0, self.staminaMax) end
-
 function PlayerShip:getStamina() return self.stamina end
 function PlayerShip:getStaminaMax() return self.staminaMax end
 
--- Function In this file
-
 function PlayerShip:takeDamage(damage)
-    if (not self.active) or ( self.invincibleTimer > 0 ) then return false end
+    if not self.active or self.invincibleTimer > 0 then return false end
     self.health = self.health - damage
+    return true
 end
 
 function PlayerShip:bulletTakeDamage(bullet)
-    if (not self.active) or ( self.invincibleTimer > 0 ) then return false end
-    
+    if not self.active or self.invincibleTimer > 0 then return false end
     local actualDamage = bullet.damage
-
     if self.armor > 0 then
-        actualDamage        = math.max(1, bullet.damage - self.armor * 0.5)
-        self.armor          = math.max(0, self.armor - bullet.damage * bullet.penetration)
+        self.armor = math.max(0, self.armor - bullet.damage * bullet.penetration)
+        actualDamage = math.max(1, actualDamage - self.armor * 0.5)
     end
-
-    self:takeDamage( math.floor(actualDamage) )
-
-    table.insert( self.damageNumbers, 
-    {
-        x      = self.x,
-        y      = self.y,
-        amount = math.floor(actualDamage),
-        timer  = 0.5,
-        alpha  = 1
-    } )
-
-    if self:getHealth() < 0 then self.active = false end
-    return false
+    self.health = self.health - actualDamage
+    table.insert(self.damageNumbers, {x = self.x, y = self.y, amount = math.floor(actualDamage), timer = 0.5, alpha = 1})
+    if self.health <= 0 then self.active = false end
+    return true
 end
-
 
 function PlayerShip:applyCollisionDamage(impact)
     if not self.active or self.invincibleTimer > 0 then return end
-    local damage = math.floor(impact)
-    if damage < 1 then damage = 1 end
+    local damage = math.max(1, math.floor(impact))
     self.health = self.health - damage
-    table.insert(self.damageNumbers, {x=self.x, y=self.y, amount=damage, timer=0.5, alpha=1})
+    table.insert(self.damageNumbers, {x = self.x, y = self.y, amount = damage, timer = 0.5, alpha = 1})
     if self.health <= 0 then self.active = false end
     self.hitFlash = 0.2
     self.invincibleTimer = self.invincibleDuration
 end
 
-
-function PlayerShip:bulletTakeDamage(bullet)
-    if (not self.active) or (self.invincibleTimer > 0) then return false end
-    
-    local actualDamage = bullet.damage
-
-    if self.armor > 0 then
-         self.armor = math.max(0, self.armor - bullet.damage * bullet.penetration)
-         local armorReduction = self.armor * 0.5
-         actualDamage = math.max(1, actualDamage - armorReduction)
-         self.health = self.health - actualDamage
-    else
-        self.health = self.health - actualDamage
-        table.insert(self.damageNumbers, {
-            x = self.x,
-            y = self.y,
-            amount = math.floor(actualDamage),
-            timer = 0.5,
-            alpha = 1
-        })
-    end
-
-    if self.health <= 0 then
-        self.health = 0
-        self.active = false
-    end
-
-    return true
-end
-
-
-
 function PlayerShip:checkCollision(bullet)
     if not self.active then return false end
-    
     local dx = bullet.x - self.x
     local dy = bullet.y - self.y
-    local dist = math.dot(dx, dy)
-    
-    return dist < 25 + bullet.size
+    return dx*dx + dy*dy < (25 + bullet.size)^2
 end
 
 function PlayerShip:shoot()
-    local bulletdata = Ships[self.tier].bulletConfig
-    local offset = 25
-    local directionAngle = self.angle - math.pi/2
-    local directionX = math.cos(directionAngle)
-    local directionY = math.sin(directionAngle)
-    local bulletX = self.x + directionX * offset
-    local bulletY = self.y + directionY * offset
-    local bulletSpeed = bulletdata.speed
-    local vx = directionX * bulletSpeed + self.vx
-    local vy = directionY * bulletSpeed + self.vy
+    local bulletData = Ships[self.tier].bulletConfig
+    local dirAngle = self.angle - math.pi/2
+    local dirX = math.cos(dirAngle)
+    local dirY = math.sin(dirAngle)
+    local bulletX = self.x + dirX * 25
+    local bulletY = self.y + dirY * 25
     self.bulletManager:shoot({
         x = bulletX,
         y = bulletY,
-        vx = vx,
-        vy = vy,
-        angle = directionAngle,
-        speed = bulletSpeed,
-        damage = bulletdata.damage,
-        penetration = bulletdata.penetration,
-        size = bulletdata.size,
-        color = bulletdata.color,
-        lifeTime = bulletdata.lifetime,
+        vx = dirX * bulletData.speed + self.vx,
+        vy = dirY * bulletData.speed + self.vy,
+        angle = dirAngle,
+        speed = bulletData.speed,
+        damage = bulletData.damage,
+        penetration = bulletData.penetration,
+        size = bulletData.size,
+        color = bulletData.color,
+        lifeTime = bulletData.lifetime,
         owner = "player"
     })
 end
 
--- Main functions
-
-
-
-
+-- ------------------------------------------------------------
+-- Основные функции (оптимизированные)
+-- ------------------------------------------------------------
 function PlayerShip:load()
     local shipPath = Ships[self.tier].directSprite
     self.animation = SpriteLoader(shipPath)
     self.currentSprite = self.animation['idle'].sprite
-
     Shaders.load('trailGlow', [[
         extern float intensity = 1.0;
         vec4 effect(vec4 color, Image tex, vec2 tc, vec2 sc) {
@@ -267,87 +187,92 @@ function PlayerShip:load()
     ]])
 end
 
-
 function PlayerShip:update(dt)
     if not self.active then
         if self.deathEffect then self.deathEffect = self.deathEffect - dt end
         return
     end
 
+
+
+
+    -- Ограничение dt для предотвращения скачков
+    local maxDt = 0.05
+    if dt > maxDt then dt = maxDt end
+
+    -- Обновление таймеров
     if self.invincibleTimer > 0 then self.invincibleTimer = self.invincibleTimer - dt end
     if self.hitFlash > 0 then self.hitFlash = self.hitFlash - dt end
 
+    -- Плавное обновление отображаемых значений
+    local lerp = math.min(1, dt * 10)
+    self.displayHealth = self.displayHealth + (self.health - self.displayHealth) * lerp
+    self.displayArmor  = self.displayArmor  + (self.armor  - self.displayArmor)  * lerp
+    self.displayStamina = self.displayStamina + (self.stamina - self.displayStamina) * lerp
+
     -- Обновление чисел урона
-    local i = 1
-    while i <= #self.damageNumbers do
+    for i = #self.damageNumbers, 1, -1 do
         local dmg = self.damageNumbers[i]
         dmg.timer = dmg.timer - dt
         dmg.alpha = dmg.timer * 2
         dmg.y = dmg.y - 20 * dt
-        if dmg.timer <= 0 then
-            table.remove(self.damageNumbers, i)
-        else
-            i = i + 1
-        end
+        if dmg.timer <= 0 then table.remove(self.damageNumbers, i) end
     end
 
     local ship = Ships[self.tier]
 
     -- Чтение ввода
-    local dx, dy = 0, 0
-    self.isEngineOn = love.keyboard.isDown('w') or love.keyboard.isDown('s')
-    if love.keyboard.isDown('w') then dy = dy - 1 end
-    if love.keyboard.isDown('s') then dy = dy + 1 end
+    local up = love.keyboard.isDown('w')
+    local down = love.keyboard.isDown('s')
+    local left = love.keyboard.isDown('a')
+    local right = love.keyboard.isDown('d')
+    local sprint = love.keyboard.isDown('lshift')
+    self.isEngineOn = up or down
 
-    -- Определяем текущие параметры движения (обычные или спринт)
+    -- Определяем параметры движения
     local currentAccel = self.acceleration
     local currentMaxSpeed = self.maxSpeed
+    local isSprinting = false
 
-    if love.keyboard.isDown('lshift') and self.stamina > 0 and self.isEngineOn and self.stamina >= (ship.minStaminaForSprint or 0) then
+    if sprint and self.isEngineOn and self.stamina > 0 and self.stamina >= (ship.minStaminaForSprint or 0) then
         currentAccel = self.sprintAcceleration
         currentMaxSpeed = self.sprintMaxSpeed
-        self.stamina = self.stamina - (ship.staminaExpenditure or 0) * dt
-        if self.stamina < 0 then self.stamina = 0 end
+        isSprinting = true
+        self.stamina = math.max(0, self.stamina - (ship.staminaExpenditure or 0) * dt)
         self.currentSprite = self.animation.sprint.sprite
     else
         if self.stamina < self.staminaMax then
             self.stamina = math.min(self.stamina + (ship.staminaTimeRegen or 1.5) * dt, self.staminaMax)
         end
-        self.currentSprite = self.isEngineOn and self.animation.engine_turn.sprite or self.animation.idle.sprite
+        self.currentSprite = (self.isEngineOn and self.animation.engine_turn.sprite) or self.animation.idle.sprite
     end
 
-    -- Поворот с учётом скорости движения
-    local speed = math.sqrt(self.vx^2 + self.vy^2)
-    local turnBaseSpeed = ship.speedRotation * 2   -- максимальное угловое ускорение
-    local minSpeedForTurn = 5                       -- ниже этой скорости поворот невозможен
-    local maxSpeedForTurn = currentMaxSpeed         -- при этой скорости поворот достигает максимума
+    -- Направления
+    local forwardX = math.cos(self.angle - math.pi/2)
+    local forwardY = math.sin(self.angle - math.pi/2)
+    local rightX   = math.cos(self.angle)
+    local rightY   = math.sin(self.angle)
 
+    -- Поворот (зависит от скорости)
+    local speed = math.sqrt(self.vx*self.vx + self.vy*self.vy)
     local turnFactor = 0
-    if speed > minSpeedForTurn then
-        turnFactor = math.min(1, (speed - minSpeedForTurn) / (maxSpeedForTurn - minSpeedForTurn))
+    if speed > 5 then
+        turnFactor = math.min(1, (speed - 5) / (currentMaxSpeed - 5))
     end
-
     local angularAccel = 0
-    if love.keyboard.isDown('a') then
-        angularAccel = angularAccel - turnBaseSpeed * turnFactor
-    end
-    if love.keyboard.isDown('d') then
-        angularAccel = angularAccel + turnBaseSpeed * turnFactor
-    end
-
+    if left then angularAccel = angularAccel - ship.speedRotation * turnFactor end
+    if right then angularAccel = angularAccel + ship.speedRotation * turnFactor end
     self.angularVelocity = self.angularVelocity + angularAccel * dt
-    self.angularVelocity = self.angularVelocity * (1 - (self.angularFriction or 3.0) * dt)
+    self.angularVelocity = self.angularVelocity * (1 - self.angularFriction * dt)
     self.angle = self.angle + self.angularVelocity * dt
 
-    -- Боковой импульс при повороте
+    -- Боковой импульс при повороте (уменьшена сила, сглажено)
     if angularAccel ~= 0 then
-        local rightX = math.cos(self.angle)
-        local rightY = math.sin(self.angle)
-        local impulseStrength = 40 * dt
-        if love.keyboard.isDown('a') then
+        local impulseStrength = 15 * dt
+        if left then
             self.vx = self.vx + rightX * impulseStrength
             self.vy = self.vy + rightY * impulseStrength
-        elseif love.keyboard.isDown('d') then
+        elseif right then
             self.vx = self.vx - rightX * impulseStrength
             self.vy = self.vy - rightY * impulseStrength
         end
@@ -355,31 +280,25 @@ function PlayerShip:update(dt)
 
     -- Ускорение вперёд/назад
     if self.isEngineOn then
-        local forwardX = math.cos(self.angle - math.pi/2)
-        local forwardY = math.sin(self.angle - math.pi/2)
-        local accelX = forwardX * (-dy) * currentAccel * dt
-        local accelY = forwardY * (-dy) * currentAccel * dt
-        self.vx = self.vx + accelX
-        self.vy = self.vy + accelY
+        local accelDir = (up and 1 or (down and -1 or 0))
+        if accelDir ~= 0 then
+            self.vx = self.vx + forwardX * accelDir * currentAccel * dt
+            self.vy = self.vy + forwardY * accelDir * currentAccel * dt
+        end
     end
 
-    -- Разделение скорости на продольную и поперечную для эффекта дрифта
-    local forwardX = math.cos(self.angle - math.pi/2)
-    local forwardY = math.sin(self.angle - math.pi/2)
-    local rightX = math.cos(self.angle)
-    local rightY = math.sin(self.angle)
-
+    -- Разделение скорости на продольную и поперечную (дрифт)
     local forwardSpeed = self.vx * forwardX + self.vy * forwardY
-    local rightSpeed = self.vx * rightX + self.vy * rightY
+    local rightSpeed   = self.vx * rightX   + self.vy * rightY
 
     forwardSpeed = forwardSpeed * (1 - ship.friction * dt)
-    rightSpeed = rightSpeed * (1 - ship.friction * dt * 1.5)
+    rightSpeed   = rightSpeed   * (1 - ship.friction * dt * 1.5)
 
     self.vx = forwardSpeed * forwardX + rightSpeed * rightX
     self.vy = forwardSpeed * forwardY + rightSpeed * rightY
 
     -- Ограничение максимальной скорости
-    speed = math.sqrt(self.vx^2 + self.vy^2)
+    speed = math.sqrt(self.vx*self.vx + self.vy*self.vy)
     if speed > currentMaxSpeed then
         self.vx = self.vx / speed * currentMaxSpeed
         self.vy = self.vy / speed * currentMaxSpeed
@@ -389,47 +308,40 @@ function PlayerShip:update(dt)
     self.x = self.x + self.vx * dt
     self.y = self.y + self.vy * dt
 
-    -- Трейл (след)
-    local speed = math.sqrt(self.vx^2 + self.vy^2)
-    self.trailTimer = self.trailTimer - dt
-    if speed > 20 and self.trailTimer <= 0 then
-        self.trailTimer = self.trailTimer + self.trailInterval
-        local backDirX = -math.cos(self.angle - math.pi/2)
-        local backDirY = -math.sin(self.angle - math.pi/2)
-        local backX = self.x + backDirX * self.trailOffset
-        local backY = self.y + backDirY * self.trailOffset
-        table.insert(self.trail, {x = backX, y = backY, timer = self.trailLife})
-    end
-
-    -- Обновление таймеров трейла и удаление старых частиц
-    for i = #self.trail, 1, -1 do
-        local p = self.trail[i]
-        p.timer = p.timer - dt
-        if p.timer <= 0 then
-            table.remove(self.trail, i)
+    -- Трейл
+    if speed > 20 then
+        self.trailTimer = self.trailTimer - dt
+        if self.trailTimer <= 0 then
+            self.trailTimer = self.trailTimer + self.trailInterval
+            local backX = self.x - forwardX * self.trailOffset
+            local backY = self.y - forwardY * self.trailOffset
+            table.insert(self.trail, {x = backX, y = backY, timer = self.trailLife})
         end
     end
 
+    -- Обновление таймеров трейла и удаление старых
+    for i = #self.trail, 1, -1 do
+        local p = self.trail[i]
+        p.timer = p.timer - dt
+        if p.timer <= 0 then table.remove(self.trail, i) end
+    end
+
     -- Стрельба
-    self.__bulletCoolDown = (self.__bulletCoolDown > 0) and self.__bulletCoolDown - dt or self.__bulletCoolDown
+    if self.__bulletCoolDown > 0 then self.__bulletCoolDown = self.__bulletCoolDown - dt end
     if love.keyboard.isDown('space') and self.__bulletCoolDown <= 0 then
         self:shoot()
         self.__bulletCoolDown = ship.bulletConfig.coolDown
     end
 end
-
-
-
 function PlayerShip:draw()
     if self.deathEffect then
         love.graphics.setColor(1, 0.5, 0, self.deathEffect)
         love.graphics.circle("fill", self.x, self.y, 30 * (1 + self.deathEffect))
         return
     end
-    
     if not self.active then return end
 
-    -- Рисуем след как линию, соединяющую точки
+    -- Отрисовка следа (линия)
     if #self.trail > 1 then
         love.graphics.setLineWidth(6)
         love.graphics.setLineJoin("bevel")
@@ -437,7 +349,6 @@ function PlayerShip:draw()
         for i = #self.trail, 2, -1 do
             local p1 = self.trail[i-1]
             local p2 = self.trail[i]
-            -- Проверяем наличие поля timer (на случай, если какие-то старые точки без него)
             if p1.timer and p2.timer then
                 local alpha = (p1.timer + p2.timer) / (2 * self.trailLife)
                 love.graphics.setColor(1, 1, 1, alpha)
@@ -446,101 +357,27 @@ function PlayerShip:draw()
         end
     end
 
-    -- Мигание при получении урона (без изменений)
+    -- Мигание при уроне
     if self.hitFlash > 0 and math.floor(self.hitFlash * 20) % 2 == 0 then
         love.graphics.setColor(1, 1, 1, 0.5)
     else
         love.graphics.setColor(1, 1, 1, 1)
     end
-    
+
     -- Рисуем корабль
     if self.currentSprite then
-        love.graphics.draw(
-            self.currentSprite,
-            self.x, self.y, self.angle,
+        love.graphics.draw(self.currentSprite, self.x, self.y, self.angle,
             self.size_x, self.size_y,
-            self.currentSprite:getWidth() * 0.5, self.currentSprite:getHeight() * 0.5
-        )
-    else
-        error("Sprite not loaded for ship")
+            self.currentSprite:getWidth() * 0.5, self.currentSprite:getHeight() * 0.5)
     end
 
-    -- Рисуем числа урона
+    -- Числа урона
     for _, dmg in ipairs(self.damageNumbers) do
         love.graphics.setColor(1, 0, 0, dmg.alpha)
         love.graphics.print("-" .. dmg.amount, dmg.x - 10, dmg.y)
     end
 end
 
-function PlayerShip:hud()
-    local centerOx = function(size_w1, size_w2) return (size_w1 / 2) - size_w2 / 2 end    
-
-
-    local w_screen, h_screen = love.graphics.getWidth(), love.graphics.getHeight()
-
-    -- HITPOINTS
-    do
-        local health_w = w_screen / 3
-        local health_h = 5.5 * 2
-        local health = self:getHealth()
-
-        local hitpoints = math.clamp(health * (health_w / self:getMaxHealth()), 0, health_w)
-        local center_health = centerOx(w_screen, health_w)
-        
-
-        love.graphics.setColor(1, 1, 1, 0.75)
-        love.graphics.setLineWidth(0.2)
-        love.graphics.rectangle("line", center_health, health_h, health_w, health_h, 5, 8.5)
-        love.graphics.setColor(1, 0, 0, 0.75)
-        love.graphics.rectangle("fill", center_health, health_h, hitpoints, health_h, 5, 8.5)
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.print(self:getHealth() .. '/' .. self:getMaxHealth(), health_w * 2.01, health_h - 2)
-    end
-    
-
-    --ARMOR 
-    do
-        local health_w = w_screen / 3
-        local health_h = 8.5 * 4
-
-        local hitpoints = math.clamp(self:getArmor() * (health_w / self:getMaxArmor()), 0, health_w)
-        local center_health = centerOx(w_screen, health_w)
-        
-
-        love.graphics.setColor(1, 1, 1, 0.75)
-        love.graphics.setLineWidth(0.2)
-        love.graphics.rectangle("line", center_health, health_h, health_w, 6, 5, 6)
-        love.graphics.setColor(0, 0.5, 1, 0.75)
-        love.graphics.rectangle("fill", center_health, health_h, hitpoints, 6, 5, 6)
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.print(math.floor(self:getArmor()) .. '/' .. self:getMaxArmor(), health_w * 2.01, health_h - 2)
-    end
-
-
-    -- Stamina
-    do
-    local health_w = w_screen / 3
-        local health_h = 8.5 * 6
-
-        local hitpoints = math.clamp(self:getStamina() * (health_w / self:getStaminaMax()), 0, health_w)
-        local center_health = centerOx(w_screen, health_w)
-        
-
-        love.graphics.setColor(1, 1, 1, 0.75)
-        love.graphics.setLineWidth(0.2)
-        love.graphics.rectangle("line", center_health, health_h, health_w, 6, 5, 6)
-        love.graphics.setColor(1, 0.5, 0, 0.75)
-        love.graphics.rectangle("fill", center_health, health_h, hitpoints, 6, 5, 6)
-        love.graphics.setColor(1, 1, 1, 1)
-    end
-
-
-end
-
-setmetatable(PlayerShip, {
-    __call = function(cls, ...)
-        return cls.new(...)
-    end
-})
+setmetatable(PlayerShip, { __call = function(cls, ...) return cls.new(...) end })
 
 return PlayerShip

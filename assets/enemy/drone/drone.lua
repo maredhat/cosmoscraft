@@ -1,3 +1,28 @@
+-- Локализация глобальных библиотек для производительности
+local math = math
+local table = table
+local ipairs = ipairs
+local pairs = pairs
+local type = type
+local tostring = tostring
+local love = love
+local lg = love.graphics
+local filesystem = love.filesystem
+
+-- Локализация часто используемых математических функций
+local random = math.random
+local sqrt = math.sqrt
+local sin = math.sin
+local cos = math.cos
+local atan2 = math.atan2
+local pi = math.pi
+local max = math.max
+local min = math.min
+
+-- Локализация функций работы с таблицами
+local insert = table.insert
+local remove = table.remove
+
 local SpriteLoader = require 'lib.util.animation.spriteloader'
 local Rate = require 'assets.items.config.rates'
 local Config = require 'assets.enemy.drone.config'
@@ -74,7 +99,7 @@ function Drone.new(x, y, bulletManager, player, tier, scene, debug, settingsOver
     self.targetAngle = 0
     self.currentSpeed = 0
     self.zigzagTimer = 0
-    self.zigzagOffset = math.random() * 100
+    self.zigzagOffset = random() * 100
     
     self.bulletManager = bulletManager
     self.player = player
@@ -117,7 +142,7 @@ end
 function Drone:takeDamage(amount, bullet)
     self.health = self.health - amount
     
-    table.insert(self.damageNumbers, {
+    insert(self.damageNumbers, {
         x = self.x,
         y = self.y - 40,
         amount = amount,
@@ -137,7 +162,7 @@ function Drone:takeDamage(amount, bullet)
         
         if self.scene and self.scene.itemManager and self.drops then
             for _, drop in ipairs(self.drops) do
-                if math.random() < drop.chance then
+                if random() < drop.chance then
                     self.scene.itemManager:addItem(self.x, self.y, drop.name)
                 end
             end
@@ -164,14 +189,14 @@ function Drone:applyCollisionDamage(impact)
     local damage = math.floor(impact)
     if damage < 1 then damage = 1 end
     self.health = self.health - damage
-    table.insert(self.damageNumbers, {x=self.x, y=self.y-20, amount=damage, timer=0.6, alpha=1})
+    insert(self.damageNumbers, {x=self.x, y=self.y-20, amount=damage, timer=0.6, alpha=1})
     self.hitFlash = 0.15
     if self.health <= 0 then
         self.active = false
         self.deathEffect = 0.4
         if self.scene and self.scene.itemManager and self.drops then
             for _, drop in ipairs(self.drops) do
-                if math.random() < drop.chance then
+                if random() < drop.chance then
                     self.scene.itemManager:addItem(self.x, self.y, drop.name)
                 end
             end
@@ -187,7 +212,7 @@ function Drone:checkCollision(bullet)
     if not self.active then return false end
     local dx = bullet.x - self.x
     local dy = bullet.y - self.y
-    local dist = math.sqrt(dx*dx + dy*dy)
+    local dist = sqrt(dx*dx + dy*dy)
     return dist < self.width/2 + bullet.size
 end
 
@@ -195,7 +220,7 @@ function Drone:canSeePlayer()
     if not self.player or not self.player.active then return false end
     local dx = self.player.x - self.x
     local dy = self.player.y - self.y
-    local dist = math.sqrt(dx*dx + dy*dy)
+    local dist = sqrt(dx*dx + dy*dy)
     return dist < self.detectionRange
 end
 
@@ -203,7 +228,7 @@ function Drone:canAttackPlayer()
     if not self.player or not self.player.active then return false end
     local dx = self.player.x - self.x
     local dy = self.player.y - self.y
-    local dist = math.sqrt(dx*dx + dy*dy)
+    local dist = sqrt(dx*dx + dy*dy)
     return dist < self.attackRange
 end
 
@@ -211,13 +236,13 @@ function Drone:getDistanceToPlayer()
     if not self.player then return math.huge end
     local dx = self.player.x - self.x
     local dy = self.player.y - self.y
-    return math.sqrt(dx*dx + dy*dy)
+    return sqrt(dx*dx + dy*dy)
 end
 
 function Drone:smoothRotate(targetAngle, dt)
     local angleDiff = targetAngle - self.angle
-    while angleDiff > math.pi do angleDiff = angleDiff - 2*math.pi end
-    while angleDiff < -math.pi do angleDiff = angleDiff + 2*math.pi end
+    while angleDiff > pi do angleDiff = angleDiff - 2*pi end
+    while angleDiff < -pi do angleDiff = angleDiff + 2*pi end
     local maxRotation = self.rotationSpeed * dt
     if math.abs(angleDiff) > maxRotation then
         self.angle = self.angle + (angleDiff > 0 and 1 or -1) * maxRotation
@@ -260,7 +285,7 @@ function Drone:updateIntelligence(dt, allDrones)
                 if drone ~= self and drone.active then
                     local dx = drone.x - self.x
                     local dy = drone.y - self.y
-                    local dist = math.sqrt(dx*dx + dy*dy)
+                    local dist = sqrt(dx*dx + dy*dy)
                     if dist < self.communicationRange then alliesNearby = alliesNearby + 1 end
                 end
             end
@@ -280,7 +305,7 @@ function Drone:updateIntelligence(dt, allDrones)
             if drone ~= self and drone.active then
                 local dx = drone.x - self.x
                 local dy = drone.y - self.y
-                local dist = math.sqrt(dx*dx + dy*dy)
+                local dist = sqrt(dx*dx + dy*dy)
                 if dist < self.communicationRange then
                     drone:receiveIntel(self.lastKnownPlayerPosition)
                 end
@@ -311,11 +336,11 @@ function Drone:startPatrol()
 end
 
 function Drone:generatePatrolPath()
-    local angle = math.random() * math.pi * 2
-    local distance = math.random() * self.patrolRadius
-    self.patrolTargetX = self.patrolStartX + math.cos(angle) * distance
-    self.patrolTargetY = self.patrolStartY + math.sin(angle) * distance
-    self.patrolWaitTimer = math.random() * 2
+    local angle = random() * pi * 2
+    local distance = random() * self.patrolRadius
+    self.patrolTargetX = self.patrolStartX + cos(angle) * distance
+    self.patrolTargetY = self.patrolStartY + sin(angle) * distance
+    self.patrolWaitTimer = random() * 2
 end
 
 function Drone:advancedCollisionAvoidance(allDrones)
@@ -324,7 +349,7 @@ function Drone:advancedCollisionAvoidance(allDrones)
         if drone ~= self and drone.active then
             local dx = self.x - drone.x
             local dy = self.y - drone.y
-            local dist = math.sqrt(dx*dx + dy*dy)
+            local dist = sqrt(dx*dx + dy*dy)
             if dist < self.separationDistance and dist > 0 then
                 local strength = (self.separationDistance - dist) / self.separationDistance
                 avoidanceX = avoidanceX + (dx / dist) * strength * 2
@@ -343,7 +368,7 @@ function Drone:avoidCollisions(allDrones, dt)
         if other ~= self and other.active then
             local dx = other.x - self.x
             local dy = other.y - self.y
-            local dist = math.sqrt(dx*dx + dy*dy)
+            local dist = sqrt(dx*dx + dy*dy)
             if dist < self.separationDistance * 2 then
                 local dvx = other.vx - self.vx
                 local dvy = other.vy - self.vy
@@ -353,7 +378,7 @@ function Drone:avoidCollisions(allDrones, dt)
                     local c = dx*dx + dy*dy - (self.width/2 + other.width/2)^2
                     local discriminant = b*b - 4*a*c
                     if discriminant >= 0 then
-                        local t = (-b - math.sqrt(discriminant)) / (2*a)
+                        local t = (-b - sqrt(discriminant)) / (2*a)
                         if t > 0 and t < timeHorizon then
                             local predX = self.x + self.vx * t
                             local predY = self.y + self.vy * t
@@ -361,10 +386,10 @@ function Drone:avoidCollisions(allDrones, dt)
                             local otherPredY = other.y + other.vy * t
                             local dxPred = otherPredX - predX
                             local dyPred = otherPredY - predY
-                            local distPred = math.sqrt(dxPred*dxPred + dyPred*dyPred)
+                            local distPred = sqrt(dxPred*dxPred + dyPred*dyPred)
                             if distPred > 0 then
                                 local strength = (self.separationDistance - distPred) / self.separationDistance
-                                strength = math.max(0, math.min(1, strength))
+                                strength = max(0, min(1, strength))
                                 avoidanceX = avoidanceX - (dxPred / distPred) * strength * 5
                                 avoidanceY = avoidanceY - (dyPred / distPred) * strength * 5
                             end
@@ -389,14 +414,14 @@ function Drone:maintainFormation(allDrones)
         if other ~= self and other.active then
             local dx = other.x - self.x
             local dy = other.y - self.y
-            local dist = math.sqrt(dx*dx + dy*dy)
+            local dist = sqrt(dx*dx + dy*dy)
             if dist > 0 then
                 if dist > self.preferredDistance then
-                    local strength = math.min(1, (dist - self.preferredDistance) / self.preferredDistance)
+                    local strength = min(1, (dist - self.preferredDistance) / self.preferredDistance)
                     cohesionX = cohesionX + (dx / dist) * strength * 0.5
                     cohesionY = cohesionY + (dy / dist) * strength * 0.5
                 elseif dist < self.preferredDistance then
-                    local strength = math.min(1, (self.preferredDistance - dist) / self.preferredDistance)
+                    local strength = min(1, (self.preferredDistance - dist) / self.preferredDistance)
                     cohesionX = cohesionX - (dx / dist) * strength * 0.5
                     cohesionY = cohesionY - (dy / dist) * strength * 0.5
                 end
@@ -416,7 +441,7 @@ function Drone:getDesiredDirection(dt)
     
     local dx = self.player.x - self.x
     local dy = self.player.y - self.y
-    local dist = math.sqrt(dx*dx + dy*dy)
+    local dist = sqrt(dx*dx + dy*dy)
     local dirX, dirY = 0, 0
     if dist > 0 then
         dirX = dx / dist
@@ -429,14 +454,14 @@ function Drone:getDesiredDirection(dt)
     if self.currentState == "investigate" and self.investigationTarget then
         local tx = self.investigationTarget.x - self.x
         local ty = self.investigationTarget.y - self.y
-        local tdist = math.sqrt(tx*tx + ty*ty)
+        local tdist = sqrt(tx*tx + ty*ty)
         if tdist > 0 then
             moveX = tx / tdist
             moveY = ty / tdist
         end
     elseif self.currentState == "attack" then
         self.zigzagTimer = self.zigzagTimer + dt * self.zigzagFrequency
-        local zigzag = math.sin(self.zigzagTimer + self.zigzagOffset) * self.zigzagAmplitude
+        local zigzag = sin(self.zigzagTimer + self.zigzagOffset) * self.zigzagAmplitude
         moveX = dirX * 0.3 + perpX * zigzag * 0.01
         moveY = dirY * 0.3 + perpY * zigzag * 0.01
     elseif self.currentState == "retreat" then
@@ -452,7 +477,7 @@ function Drone:getDesiredDirection(dt)
     elseif self.currentState == "search" and self.lastKnownPlayerPosition then
         local tx = self.lastKnownPlayerPosition.x - self.x
         local ty = self.lastKnownPlayerPosition.y - self.y
-        local tdist = math.sqrt(tx*tx + ty*ty)
+        local tdist = sqrt(tx*tx + ty*ty)
         if tdist > 0 then
             moveX = tx / tdist
             moveY = ty / tdist
@@ -464,7 +489,7 @@ end
 function Drone:patrolMovement(dt)
     local dx = self.patrolTargetX - self.x
     local dy = self.patrolTargetY - self.y
-    local dist = math.sqrt(dx*dx + dy*dy)
+    local dist = sqrt(dx*dx + dy*dy)
     if dist < 30 then
         if self.patrolWaitTimer then
             self.patrolWaitTimer = self.patrolWaitTimer - dt
@@ -491,8 +516,6 @@ function Drone:update(dt, allDrones)
         if self.hitFlash <= 0 then self.hitFlash = nil end
     end
 
-
-
     local i = 1
     while i <= #self.damageNumbers do
         local dmg = self.damageNumbers[i]
@@ -500,7 +523,7 @@ function Drone:update(dt, allDrones)
         dmg.alpha = dmg.timer * 1.67
         dmg.y = dmg.y - 30 * dt
         if dmg.timer <= 0 then
-            table.remove(self.damageNumbers, i)
+            remove(self.damageNumbers, i)
         else
             i = i + 1
         end
@@ -518,7 +541,7 @@ function Drone:update(dt, allDrones)
         end
     end
 
-        local desiredX, desiredY = 0, 0
+    local desiredX, desiredY = 0, 0
     local targetSpeed = self.speed
 
     if self.patrolMode then
@@ -536,17 +559,17 @@ function Drone:update(dt, allDrones)
     desiredX = desiredX + avoidX + formX
     desiredY = desiredY + avoidY + formY
 
-    local len = math.sqrt(desiredX*desiredX + desiredY*desiredY)
+    local len = sqrt(desiredX*desiredX + desiredY*desiredY)
     if len > 0 then
         desiredX = desiredX / len
         desiredY = desiredY / len
     end
 
     if desiredX ~= 0 or desiredY ~= 0 then
-        local targetAngle = math.atan2(desiredY, desiredX)
+        local targetAngle = atan2(desiredY, desiredX)
         self:smoothRotate(targetAngle, dt)
-        local forwardX = math.cos(self.angle)
-        local forwardY = math.sin(self.angle)
+        local forwardX = cos(self.angle)
+        local forwardY = sin(self.angle)
         local accelX = forwardX * self.acceleration * dt
         local accelY = forwardY * self.acceleration * dt
         self.vx = self.vx + accelX
@@ -556,8 +579,7 @@ function Drone:update(dt, allDrones)
         self.vy = self.vy * (1 - self.friction * dt)
     end
 
-
-    local speed = math.sqrt(self.vx^2 + self.vy^2)
+    local speed = sqrt(self.vx^2 + self.vy^2)
     if speed > self.maxSpeed then
         self.vx = self.vx / speed * self.maxSpeed
         self.vy = self.vy / speed * self.maxSpeed
@@ -579,8 +601,8 @@ function Drone:shoot()
 
     local bulletAngle = self.angle  
     
-    local dirX = math.cos(bulletAngle)
-    local dirY = math.sin(bulletAngle)
+    local dirX = cos(bulletAngle)
+    local dirY = sin(bulletAngle)
     
     local bulletX = self.x + dirX * offset
     local bulletY = self.y + dirY * offset
@@ -606,40 +628,40 @@ end
 
 function Drone:draw()
     if self.deathEffect then
-        love.graphics.setColor(1, 0.8, 0, self.deathEffect)
-        love.graphics.circle("fill", self.x, self.y, self.width * (1 + self.deathEffect * 2))
+        lg.setColor(1, 0.8, 0, self.deathEffect)
+        lg.circle("fill", self.x, self.y, self.width * (1 + self.deathEffect * 2))
         return
     end
     
     if not self.active then return end
     
     if self.animation and self.animation.idle and self.animation.idle.sprite then
-        love.graphics.draw(
+        lg.draw(
             self.animation.idle.sprite,
             self.x, self.y,
-            self.angle + math.pi/2,
+            self.angle + pi/2,
             self.scale, self.scale,
             self.animation.idle.width / 2,
             self.animation.idle.height / 2
         )
     else
-        love.graphics.setColor(1, 0, 0, 1)
-        love.graphics.rectangle("fill", self.x - self.width/2, self.y - self.height/2, self.width, self.height)
+        lg.setColor(1, 0, 0, 1)
+        lg.rectangle("fill", self.x - self.width/2, self.y - self.height/2, self.width, self.height)
     end
     
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.setColor(0.2, 0.2, 0.2, 1)
-    love.graphics.rectangle("fill", self.x - self.width/2, self.y - self.height/2 - 12, self.width, 4)
-    love.graphics.setColor(1, 0, 0, 1)
+    lg.setColor(1, 1, 1, 1)
+    lg.setColor(0.2, 0.2, 0.2, 1)
+    lg.rectangle("fill", self.x - self.width/2, self.y - self.height/2 - 12, self.width, 4)
+    lg.setColor(1, 0, 0, 1)
     local healthWidth = (self.health / self.maxHealth) * self.width
-    love.graphics.rectangle("fill", self.x - self.width/2, self.y - self.height/2 - 12, healthWidth, 4)
+    lg.rectangle("fill", self.x - self.width/2, self.y - self.height/2 - 12, healthWidth, 4)
 
     for _, dmg in ipairs(self.damageNumbers) do
-        love.graphics.setColor(1, 1, 0, dmg.alpha)
-        love.graphics.print("-" .. dmg.amount, dmg.x - 15, dmg.y)
+        lg.setColor(1, 1, 0, dmg.alpha)
+        lg.print("-" .. dmg.amount, dmg.x - 15, dmg.y)
     end
     
-    love.graphics.setColor(1, 1, 1, 1)
+    lg.setColor(1, 1, 1, 1)
 end
 
 setmetatable(Drone, {

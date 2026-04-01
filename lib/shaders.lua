@@ -79,6 +79,8 @@ function Shaders.apply(name, uniforms)
     end
 end
 
+
+
 -- Сбросить шейдер (вернуть стандартный)
 function Shaders.reset()
     love.graphics.setShader()

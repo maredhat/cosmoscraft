@@ -298,7 +298,7 @@ function SaveSelectScene:mousepressed(x, y, button)
             if not self.saves[i].exists then
                 self:createSave(i)
             end
-            self.manager:switch("bullet", self.settings, i)
+            self.manager:switchWithTransition("bullet", "fade", 0.8, self.settings)
             return
         end
     end
@@ -306,7 +306,7 @@ end
 
 function SaveSelectScene:keypressed(key)
     if key == "escape" then
-        self.manager:switch("menu", self.settings)
+        self.manager:switchWithTransition("menu", "fade", 0.8, self.settings)
     end
 end
 

@@ -27,12 +27,14 @@ function SettingsScene.new(manager, settings)
     }
     self.activeTab = "sounds"
 
+-- scenes/settings_scene.lua (добавленные опции)
+-- Вставьте в соответствующие секции self.options
+
     self.options = {
         sounds = {
             { name = "Master Volume",  key = "masterVolume", type = "slider", min = 0, max = 1, default = 1.0 },
             { name = "Music Volume",   key = "musicVolume",  type = "slider", min = 0, max = 1, default = 0.7 },
             { name = "SFX Volume",     key = "sfxVolume",    type = "slider", min = 0, max = 1, default = 0.8 },
-            { name = "UI Sounds",      key = "uiSounds",     type = "toggle", default = true },
         },
         graphics = {
             { name = "Fullscreen",        key = "fullscreen", type = "toggle", default = false },
@@ -43,6 +45,12 @@ function SettingsScene.new(manager, settings)
         gameplay = {
             { name = "Auto Save",           key = "autoSave",   type = "toggle", default = true },
             { name = "Mouse Sensitivity",    key = "sensitivity",type = "slider", min = 0.1, max = 2.0, default = 1.0 },
+            { name = "Camera Smoothness",    key = "cameraSmoothness", type = "slider", min = 0.01, max = 0.5, default = 0.1 },
+            { name = "Invert Y",             key = "invertY",    type = "toggle", default = false },
+            { name = "Show HUD",             key = "showHUD",    type = "toggle", default = true },
+            { name = "Damage Numbers",       key = "damageNumbers", type = "toggle", default = true },
+            { name = "Difficulty",           key = "difficulty", type = "dropdown", default = "Normal", options = {"Easy", "Normal", "Hard"} },
+            { name = "Controller Vibration", key = "vibration",  type = "toggle", default = true },
         }
     }
 
@@ -495,7 +503,7 @@ end
 function SettingsScene:keypressed(key, sc, rep)
     self.root:keypressed(key, sc, rep)
     if key == "escape" then
-        self.manager:switch("menu")
+        self.manager:switchWithTransition("menu", "fade", 0.8, self.settings)
     end
 end
 

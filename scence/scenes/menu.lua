@@ -180,7 +180,7 @@ function MenuScene:mousereleased(x, y, button)
 end
 
 function MenuScene:keypressed(key)
-    if key == "escape" then love.event.quit() end
+
 end
 
 return MenuScene
